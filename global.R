@@ -25,6 +25,9 @@ library(dplyr)
 library(rsconnect)
 library(curl)
 library(shinyAce)
+library(fst)
+library(DT)
+library(googlesheets)
 
 # Increase max size
 options(shiny.maxRequestSize=1000*1024^2)
@@ -58,10 +61,13 @@ se.min <- function(x) (mean(x)) - se(x)
 se.max <- function(x) (mean(x)) + se(x)
 
 
+colors <- c("#66C5CC","#F6CF71","#F89C74","#DCB0F2","#87C55F","#9EB9F3","#FE88B1","#C9DB74","#8BE0A4","#B497E7","#D3B484")
+#tilesURL <- "http://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+
 #runApp()
 
 # Set up account info to connect to shinyapps
-rsconnect::setAccountInfo(name='brookegibbons',token='6D757FE28C61F12274F1E16C30783B95',
-                          secret='zu/Mcxyo0ZN3qX/QTvc/SYoeRxuoY9LdPSDIET09') # connect to shinyapps
+#rsconnect::setAccountInfo(name='brookegibbons',token='6D757FE28C61F12274F1E16C30783B95',
+#                          secret='zu/Mcxyo0ZN3qX/QTvc/SYoeRxuoY9LdPSDIET09') # connect to shinyapps
 
-deployApp()
+#deployApp()
