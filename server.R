@@ -91,8 +91,8 @@ life.history<-  reactive({
       mutate(Commercial=str_detect(Fishing.type,"C"))%>%
       mutate(Recreational=str_detect(Fishing.type,"R"))%>%
       mutate(Bycatch=str_detect(Fishing.type,"B"))%>%
-      dplyr::select(Family,Genus,Species,RLS.trophic.group,Fishing.type,Commercial,Recreational,Bycatch)%>%
-      dplyr::rename('Trophic group'=RLS.trophic.group,'Target group'=Fishing.type)
+      dplyr::select(Family,Genus,Species,RLS.trophic.group,Fishing.type,Commercial,Recreational,Bycatch)#%>%
+      #dplyr::rename('Trophic group'=RLS.trophic.group,'Target group'=Fishing.type)
     
     life.history
     
@@ -765,9 +765,12 @@ assemblage_maxn_data <- reactive({
 ## Habitat spatial plot ----
   output$habitat.spatial.plot <- renderLeaflet({
     
-    #data <- hab_campaignid_data()[, input$habitat.types]
+    data<-hab_campaignid_data()[,c("macroalgae","stony.corals","octocoral.black","sponges","hydroids","consolidated","unconsolidated")]
     
-    data <- hab_campaignid_data()[, c("biota.ascidians","biota.consolidated","biota.crinoids","biota.hydroids","biota.invertebrate.complex","biota.macroalgae","biota.octocoral.black","biota.seagrasses","biota.sponges","biota.stony.corals","biota.unconsolidated")]
+    names(data)<-ga.capitalise(names(data))
+    names(data)<-str_replace_all(names(data),c("[^[:alnum:]]"=" "))
+    
+    colors <- c("#4eb570","#d94c45","#78807a","#d99445","#d67cc9","#bd6539","#faef52")
     
     basemap <- leaflet(width = "100%", height = "800px") %>%
       addTiles()
@@ -790,9 +793,14 @@ assemblage_maxn_data <- reactive({
     req(input$habitat.type)
     
     habitat.lite<-hab_campaignid_data()%>%
-      select(campaignid,sample,longitude,latitude,"biota.ascidians","biota.consolidated","biota.crinoids","biota.hydroids","biota.invertebrate.complex","biota.macroalgae","biota.octocoral.black","biota.seagrasses","biota.sponges","biota.stony.corals","biota.unconsolidated")
+      select(campaignid,sample,longitude,latitude,consolidated,hydroids,macroalgae,octocoral.black,sponges,stony.corals,unconsolidated) # "biota.ascidians", "biota.crinoids", "biota.invertebrate.complex","biota.seagrasses",
     # Gather habitat to bubble plot easier
-    habitat<-gather(habitat.lite,"biota.ascidians","biota.consolidated","biota.crinoids","biota.hydroids","biota.invertebrate.complex","biota.macroalgae","biota.octocoral.black","biota.seagrasses","biota.sponges","biota.stony.corals","biota.unconsolidated",key="habitat.type",value="percent.cover")
+    habitat<-gather(habitat.lite,"macroalgae","stony.corals","octocoral.black","sponges","hydroids","consolidated","unconsolidated",key="habitat.type",value="percent.cover")
+    
+    habitat<-habitat%>%
+      mutate(habitat.type=ga.capitalise(habitat.type))%>%
+      mutate(habitat.type=str_replace_all(.$habitat.type, c("[^[:alnum:]]"=" ")))%>%
+      glimpse()
     
     habitat.bubble<-habitat%>%
       filter(habitat.type==input$habitat.type)
@@ -842,52 +850,24 @@ assemblage_maxn_data <- reactive({
     updateSelectInput(session, "maxn.summary.family.selector", choices = options, selected = "All")
   })
   
-  output$family.selector <- renderUI({
-    
-    if (input$campaignid.selector == "All") {
-      df<-campaignid_data()
-      
-      options <- df %>%
-        #filter(key == input$key.selector) %>%
-        distinct(family) %>%
-        pull("family")%>%
-        sort()
-      
-      create_dropdown("family.selector", options, "Family:")
-      
-    } else {
-      
-      df<-campaignid_data()
-      
-      family.genus.species.to.keep<-df%>%
-        filter(maxn>0)%>%
-        filter(campaignid == input$campaignid.selector)%>%
-        distinct(family,genus,species)
-      
-      options <- df %>%
-        #filter(key == input$key.selector) %>%
-        filter(campaignid == input$campaignid.selector) %>%
-        semi_join(family.genus.species.to.keep)%>%
-        distinct(family) %>%
-        pull("family")%>%
-        sort()
-      
-      create_dropdown("family.selector", options, "Family:")
-    }
-  })
-  
-  
-  
-  
-  
-  
-  
   # Maxn data ----
   maxn.summary.data <- reactive({
     life.history<-life.history()
     
+    # maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
+    #   dplyr::mutate(key="maxn")%>%
+    #   as.data.frame()%>%
+    #   filter(maxn>0)%>%
+    #   ## scientific, trophic, target
+    #   dplyr::group_by(family,genus,species)%>%
+    #   dplyr::summarise(Total.abundance=sum(maxn),Number.of.samples=length(unique(id)))%>%
+    #   ungroup()%>%
+    #   arrange(-Total.abundance)%>%
+    #   dplyr::rename(Family=family,Genus=genus,Species=species,'Total abundance'=Total.abundance,'Number of samples'=Number.of.samples)%>%
+    #   left_join(.,life.history)
+  
+  if (input$maxn.summary.groupby=="Species") {
     maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
-      dplyr::mutate(key="maxn")%>%
       as.data.frame()%>%
       filter(maxn>0)%>%
       dplyr::group_by(family,genus,species)%>%
@@ -895,11 +875,47 @@ assemblage_maxn_data <- reactive({
       ungroup()%>%
       arrange(-Total.abundance)%>%
       dplyr::rename(Family=family,Genus=genus,Species=species,'Total abundance'=Total.abundance,'Number of samples'=Number.of.samples)%>%
-      left_join(.,life.history)
+      left_join(.,life.history)%>%
+      dplyr::rename('Trophic group'=RLS.trophic.group,'Target group'="Fishing.type")
+  }
+    
+  if (input$maxn.summary.groupby=="Target group") {
+    maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
+      as.data.frame()%>%
+      filter(maxn>0)%>%
+      dplyr::rename(Family=family,Genus=genus,Species=species)%>%
+      left_join(.,life.history)%>%
+      dplyr::rename(target.group=Fishing.type)%>%
+      dplyr::mutate(target.group=str_replace_all(.$target.group,c("R"="Recreational","C"="Commercial","B/"="","B"=NA)))%>%
+      tidyr::replace_na(list(target.group="Non-target"))%>%
+      dplyr::group_by(target.group)%>%
+      dplyr::summarise(Total.abundance=sum(maxn),Number.of.samples=length(unique(id)))%>%
+      ungroup()%>%
+      arrange(-Total.abundance)%>%
+      dplyr::rename('Total abundance'=Total.abundance,'Number of samples'=Number.of.samples,'Target group'=target.group)%>%
+      glimpse()
+  }
+    
+  if (input$maxn.summary.groupby=="Trophic group") {
+    maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
+      as.data.frame()%>%
+      filter(maxn>0)%>%
+      dplyr::rename(Family=family,Genus=genus,Species=species)%>%
+      left_join(.,life.history)%>%
+      dplyr::rename(trophic.group=RLS.trophic.group)%>%
+      tidyr::replace_na(list(trophic.group="no trophic group"))%>%
+      dplyr::group_by(trophic.group)%>%
+      dplyr::summarise(Total.abundance=sum(maxn),Number.of.samples=length(unique(id)))%>%
+      ungroup()%>%
+      arrange(-Total.abundance)%>%
+      dplyr::rename('Total abundance'=Total.abundance,'Number of samples'=Number.of.samples,'Trophic group'=trophic.group)
+  }
+    
+    maxn.data
   })
-  
+    
   output$maxn.summary <- DT::renderDataTable(
-    DT::datatable(maxn.summary.data()[, input$show_vars, drop = FALSE], options = list(
+    DT::datatable(maxn.summary.data(), options = list( # [, input$show_vars, drop = FALSE]
         lengthMenu = list(c(10, 25, 50, -1), c('10', '25','50', 'All')),
         pageLength = 15, rownames= FALSE
       )
@@ -917,7 +933,7 @@ assemblage_maxn_data <- reactive({
   })
   
   output$species.richness <- renderText({ 
-    paste("Overall species richness: <b>",length(unique(maxn.summary()$scientific)),"</b>")
+    paste("Overall species richness:",length(unique(maxn.summary()$scientific)))
   })
   
   

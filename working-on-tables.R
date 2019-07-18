@@ -15,7 +15,7 @@ life.history <- gs_title("Australia.life.history")%>%
   mutate(Recreational=str_detect(Fishing.type,"R"))%>%
   mutate(Bycatch=str_detect(Fishing.type,"B"))%>%
   dplyr::select(Family,Genus,Species,RLS.trophic.group,Fishing.type,Commercial,Recreational,Bycatch)%>%
-  dplyr::rename('Trophic group'=RLS.trophic.group,'Target group'=Fishing.type)%>%
+  #dplyr::rename('Trophic group'=RLS.trophic.group,'Target group'=Fishing.type)%>%
   ga.clean.names()
 
 
@@ -23,12 +23,37 @@ life.history <- gs_title("Australia.life.history")%>%
 maxn<-read_fst("complete.maxn.fst")%>%
   glimpse()
 
+
+maxn.data <- read_fst("complete.maxn.fst")%>%
+  as.data.frame()%>%
+  filter(maxn>0)%>%
+  dplyr::rename(Family=family,Genus=genus,Species=species)%>%
+  left_join(.,life.history)%>%
+  dplyr::rename(target.group=Fishing.type)%>%
+  dplyr::mutate(target.group=str_replace_all(.$target.group,c("R"="Recreation","C"="Commercial","B/"="","B"=NA)))%>%
+  tidyr::replace_na(list(target.group="Non-target"))%>%
+  group_by(target.group)%>%
+  dplyr::summarise(Total.abundance=sum(maxn),Number.of.samples=length(unique(id)))%>%
+  ungroup()%>%
+  arrange(-Total.abundance)%>%
+  dplyr::rename('Total abundance'=Total.abundance,'Number of samples'=Number.of.samples,'Target group'=target.group)%>%
+  glimpse()
+
+
+
 summarised.maxn<-maxn%>%
   filter(maxn>0)%>%
-  dplyr::group_by(family,genus,species)%>%
+  left_join(life.history)%>%
+  dplyr::mutate(target.group=str_replace_all(.$fishing.type,c("R"="Recreation","C"="Commercial","B/"="","B"=NA)))%>%
+  dplyr::rename(trophic.group=rls.trophic.group)%>%
+  tidyr::replace_na(list(target.group="Non-target",trophic.group="no trophic group"))%>%
+  dplyr::group_by(target.group)%>%
   dplyr::summarise(total.abundance=sum(maxn),number.of.samples=length(unique(id)))%>%
   ungroup()%>%
-  arrange(-total.abundance)
+  arrange(-total.abundance)%>%
+  left_join(life.history)
+  
+  unique(summarised.maxn$target.group)
 
 overall.total<-sum(summarised.maxn$total.abundance)
 species.richness<-length(unique(maxn$scientific))

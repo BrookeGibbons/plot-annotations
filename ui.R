@@ -59,16 +59,19 @@ navbarPage(
     "MaxN Summary",
     sidebarLayout(
       sidebarPanel(
-    checkboxGroupInput("show_vars", "Select column headers:",
-                       c("Family","Genus","Species","Total abundance","Number of samples","Trophic group","Target group","Commercial","Recreational","Bycatch"), selected = c("Family","Genus","Species","Total abundance","Number of samples","Trophic group","Target group","Commercial","Recreational","Bycatch")),
+    #checkboxGroupInput("show_vars", "Select column headers:",
+    #                   c("Family","Genus","Species","Total abundance","Number of samples","Trophic group","Target group","Commercial","Recreational","Bycatch"), selected = c("Family","Genus","Species","Total abundance","Number of samples","Trophic group","Target group","Commercial","Recreational","Bycatch")),
     
-    htmlOutput("maxn.summary.family.selector",multiple=TRUE),
-    htmlOutput("maxn.summary.genus.selector",multiple=TRUE),
-    htmlOutput("maxn.summary.trophic.selector",multiple=TRUE),
-    htmlOutput("maxn.summary.target.selector",multiple=TRUE)),
+    selectInput("maxn.summary.groupby", "Summarise by :",
+                c("Species" = "Species",
+                  "Target group" = "Target group",
+                  "Trophic group" = "Trophic group"))),
     
     mainPanel(textOutput("overall.abundance"),
+              br(),
               textOutput("species.richness"),
+              br(),
+              br(),
               DT::dataTableOutput('maxn.summary')
     )
   )
@@ -181,7 +184,7 @@ navbarPage(
         # Select CampaignID
         selectInput(inputId = "habitat.campaignid.selector", label = "CampaignID",
                     choices = NULL),
-      selectInput("habitat.type", "Select habitat type for bubble plot", choices = c("biota.ascidians","biota.consolidated","biota.crinoids","biota.hydroids","biota.invertebrate.complex","biota.macroalgae","biota.octocoral.black","biota.seagrasses","biota.sponges","biota.stony.corals","biota.unconsolidated"), multiple = FALSE)),
+      selectInput("habitat.type", "Select habitat type for bubble plot", choices = c("Macroalgae","Stony corals","Octocoral black","Sponges","Hydroids","Consolidated","Unconsolidated"), multiple = FALSE)),
       # Plots
       mainPanel(
         leafletOutput(outputId = "habitat.spatial.plot", height = "500px"),

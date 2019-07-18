@@ -61,8 +61,14 @@ se.min <- function(x) (mean(x)) - se(x)
 se.max <- function(x) (mean(x)) + se(x)
 
 
-colors <- c("#66C5CC","#F6CF71","#F89C74","#DCB0F2","#87C55F","#9EB9F3","#FE88B1","#C9DB74","#8BE0A4","#B497E7","#D3B484")
-#tilesURL <- "http://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+colors <- c("#d94c45","#78807a","#bd6539","#d67cc9","#d99445","#4eb570","#faef52")
+#4eb570 green
+#d94c45 red
+#bd6539 brown
+#d67cc9 pink
+#78807a grey
+#faef52 yellow
+#d99445 orange
 
 #runApp()
 
