@@ -30,6 +30,7 @@ library(DT)
 library(googlesheets)
 library(forcats)
 library(leaflet.minicharts)
+library(GlobalArchive)
 # Increase max size
 options(shiny.maxRequestSize=1000*1024^2)
 
