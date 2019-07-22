@@ -5,7 +5,7 @@ navbarPage(
     sidebarLayout(
       sidebarPanel(
         
-        # File uploads
+  # File uploads ----
         
         fileInput("complete.maxn", "Upload complete maxn FST File",
                   accept = c("image/vnd.fst",
@@ -28,9 +28,32 @@ navbarPage(
       
     mainPanel(plotOutput(outputId= "line.plot.test", height = "300px")))),
   
-  # MaxN Tab
+  # MaxN summary Tab ----
   tabPanel(
-    "MaxN",
+    "MaxN Summary",
+    sidebarLayout(
+      sidebarPanel(
+        #checkboxGroupInput("show_vars", "Select column headers:",
+        #                   c("Family","Genus","Species","Total abundance","Number of samples","Trophic group","Target group","Commercial","Recreational","Bycatch"), selected = c("Family","Genus","Species","Total abundance","Number of samples","Trophic group","Target group","Commercial","Recreational","Bycatch")),
+        
+        selectInput("maxn.summary.groupby", "Summarise by :",
+                    c("Species" = "Species",
+                      "Target group" = "Target group",
+                      "Trophic group" = "Trophic group"))),
+      
+      mainPanel(textOutput("overall.abundance"),
+                br(),
+                textOutput("species.richness"),
+                br(),
+                br(),
+                DT::dataTableOutput('maxn.summary')
+      )
+    )
+  ),
+  
+  # MaxN Plot species Tab ----
+  tabPanel(
+    "Species MaxN plots",
     sidebarLayout(
       sidebarPanel(
         
@@ -54,48 +77,61 @@ navbarPage(
     )
   ),
   
-  # MaxN summary Tab
-  tabPanel(
-    "MaxN Summary",
-    sidebarLayout(
-      sidebarPanel(
-    #checkboxGroupInput("show_vars", "Select column headers:",
-    #                   c("Family","Genus","Species","Total abundance","Number of samples","Trophic group","Target group","Commercial","Recreational","Bycatch"), selected = c("Family","Genus","Species","Total abundance","Number of samples","Trophic group","Target group","Commercial","Recreational","Bycatch")),
-    
-    selectInput("maxn.summary.groupby", "Summarise by :",
-                c("Species" = "Species",
-                  "Target group" = "Target group",
-                  "Trophic group" = "Trophic group"))),
-    
-    mainPanel(textOutput("overall.abundance"),
-              br(),
-              textOutput("species.richness"),
-              br(),
-              br(),
-              DT::dataTableOutput('maxn.summary')
-    )
-  )
-  ),
+
   
-  # MaxN assemblage Tab
+  # MaxN assemblage plots Tab ----
   tabPanel(
-    "MaxN Assemblage plots",
+    "MaxN plots of assemblage",
     sidebarLayout(
       sidebarPanel(
-        htmlOutput("assemblage.maxn.campaignid.selector",multiple=TRUE)
-        #htmlOutput("maxn.summary.genus.selector",multiple=TRUE),
-        #htmlOutput("maxn.summary.trophic.selector",multiple=TRUE),
-        #htmlOutput("maxn.summary.target.selector",multiple=TRUE)
-        ),
+        selectInput(inputId = "assemblage.campaignid.selector", label = "CampaignID",
+                    choices = NULL),
+        selectInput("assemblage.maxn.metric.selector", "Select metric to plot", choices = c("Total abundance","Species richness"), multiple = FALSE)),
       
-      mainPanel(leafletOutput(outputId = "assemblage.maxn.spatial.plot", height = "500px")
+      mainPanel(leafletOutput(outputId = "assemblage.maxn.spatial.plot", height = "500px"),
+                plotOutput(outputId = "assemblage.maxn.status.plot", height = "300px"),
+                plotOutput(outputId = "assemblage.maxn.location.plot", height = "300px"),
+                plotOutput(outputId = "assemblage.maxn.site.plot", height = "300px")
       )
     )
   ),
   
-  # Length Tab
+  # MaxN metric plots Tab ----
   tabPanel(
-    "Length",
+    "MaxN plots of metrics",
+    sidebarLayout(
+      sidebarPanel(
+        selectInput(inputId = "metrics.maxn.campaignid.selector", label = "CampaignID",
+                    choices = NULL),
+        selectInput("metrics.maxn.metric.selector", "Select metric to plot", choices = c("Target group","Trophic group"), multiple = FALSE)),
+      
+      mainPanel(plotOutput(outputId = "metrics.maxn.status.plot", height = "300px"),
+                plotOutput(outputId = "metrics.maxn.location.plot", height = "300px"),
+                plotOutput(outputId = "metrics.maxn.site.plot", height = "300px")
+      )
+    )
+  ),
+  
+  
+  # Length summary Tab ----
+  tabPanel(
+    "Length Summary",
+    sidebarLayout(
+      sidebarPanel(
+        selectInput("length.summary.groupby", "Summarise by :",
+                    c("Species" = "Species",
+                      "Target group" = "Target group",
+                      "Trophic group" = "Trophic group"))),
+      
+      mainPanel(DT::dataTableOutput('length.summary')
+      )
+    )
+  ),
+
+  
+  # Length species Tab -----
+  tabPanel(
+    "Plot species length",
     sidebarLayout(
       sidebarPanel(
         # Select CampaignID
@@ -106,77 +142,55 @@ navbarPage(
         htmlOutput("length.family.selector"),
         htmlOutput("length.genus.selector"),
         htmlOutput("length.species.selector"),
-        
-        helpText(h4("",
-                    "Adjust plotting parameters below.")),
-        
-        # Plotting parameters
-        # Colour
-        radioButtons("length.colour.fill", "Colour and Fill by",choices = list("Status" = "status", "Location" = "location","Site" = "site"),
-                     selected = "status"),
+
         # Bin widths
         numericInput("length.binwidth","Binwidth", value = 5)),
       
       # Plots
       mainPanel(
         plotOutput(outputId = "length.histogram", height = "300px"),
-        plotOutput(outputId = "length.vs.range", height = "300px"),
+        plotOutput(outputId = "length.boxplot", height = "300px"),
+        #plotOutput(outputId = "length.vs.range", height = "300px"),
         leafletOutput(outputId = "length.spatial.plot", height = "500px")
       )
     )
   ),
   
-  # Length summary Tab
+  # Length metrics Tab -----
   tabPanel(
-    "Length Summary",
+    "Plot length metrics",
     sidebarLayout(
       sidebarPanel(
-        checkboxGroupInput("length_show_vars", "Select column headers:",
-                           c("Family","Genus","Species","Total measured","Number of samples","Mean length","Min length","Max length","Trophic group","Target group","Commercial","Recreational","Bycatch"), selected = c("Family","Genus","Species","Total measured","Number of samples","Mean length","Min length","Max length","Trophic group","Target group","Commercial","Recreational","Bycatch")),
-        
-        htmlOutput("length.summary.family.selector",multiple=TRUE),
-        htmlOutput("length.summary.genus.selector",multiple=TRUE),
-        htmlOutput("length.summary.trophic.selector",multiple=TRUE),
-        htmlOutput("length.summary.target.selector",multiple=TRUE)),
+        # Select CampaignID
+        selectInput(inputId = "length.metric.campaignid.selector", label = "CampaignID",
+                    choices = NULL)),
       
-      mainPanel(DT::dataTableOutput('length.summary')
-      )
+      # Plots
+      mainPanel(
+        plotOutput(outputId = "length.target.status", height = "300px"),
+        plotOutput(outputId = "length.trophic.status", height = "300px"))
     )
   ),
   
-  
-  # Mass Tab
+  # Mass metrics Tab ----
   tabPanel(
-    "Mass",
+    "Plot mass metrics",
     sidebarLayout(
       sidebarPanel(
         # Select CampaignID
         selectInput(inputId = "mass.campaignid.selector", label = "CampaignID",
                     choices = NULL),
-        
-        # Select Family, Genus and species
-        htmlOutput("mass.family.selector"),
-        htmlOutput("mass.genus.selector"),
-        htmlOutput("mass.species.selector"),
-        
-        helpText(h4("",
-                    "Adjust plotting parameters below.")),
-        # Plotting Parameters
-        # Colour
-        radioButtons("mass.colour.fill", "Colour and Fill by",choices = list("Status" = "status", "Location" = "location","Site" = "site"),selected = "status"),
-        # Bin width
-        numericInput("mass.binwidth","Binwidth", value = 5)),
+        htmlOutput("mass.metric.selector")),
       
       # Plots
       mainPanel(
-        plotOutput(outputId = "mass.histogram", height = "300px"),
-        plotOutput(outputId = "length.vs.mass", height = "300px"),
+        plotOutput(outputId = "mass.status", height = "300px"),
         leafletOutput(outputId = "mass.spatial.plot", height = "500px")
       )
     )
   ),
   
-  # Habitat Tab
+  # Habitat Tab ----
   tabPanel(
     "Habitat",
     sidebarLayout(
@@ -194,7 +208,7 @@ navbarPage(
     )
   ),
   
-  # Example scripts
+  # Example scripts ----
   tabPanel(
     "Download Scripts",
     #headerPanel("Simple Shiny Ace!"),

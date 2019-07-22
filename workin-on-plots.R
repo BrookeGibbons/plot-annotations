@@ -58,6 +58,28 @@ habitat.lite<-habitat%>%
 # Gather habitat to bubble plot easier
 test<-gather(habitat.lite,"biota.ascidians","biota.consolidated","biota.crinoids","biota.hydroids","biota.invertebrate.complex","biota.macroalgae","biota.octocoral.black","biota.seagrasses","biota.sponges","biota.stony.corals","biota.unconsolidated",key="habitat.type",value="percent.cover")
 
+names(maxn)
 
 
+## mean +/-se plots
+ggplot(maxn, aes(x=status, y=maxn, group=status, color=status)) +  #, group=Location, color=Location
+  stat_summary(fun.y=mean, geom="line", size=1) +
+  stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1)+
+  #scale_color_manual(values = c("#00AFBB","#E7B800","red"))+
+  theme_bw()+Theme1+ 
+  xlab("Month")+
+  ylab("Average Lobster per pot (+/- SE)")
 
+
+maxn.per.sample<-maxn%>%
+  group_by(campaignid,sample,status)%>%
+  summarise(maxn=sum(maxn))
+
+ggplot(maxn.per.sample, aes(x = status,y=maxn)) + 
+  stat_summary(fun.y=mean, geom="bar",fill="white",colour="black") +
+  stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1) +
+  geom_hline(aes(yintercept=0))+
+  xlab("")+
+  ylab("Average abundance per drop (+/- SE)")+
+  theme_bw()+
+  Theme1+theme(panel.grid = element_blank(), panel.border = element_blank())

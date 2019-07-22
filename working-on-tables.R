@@ -19,6 +19,16 @@ life.history <- gs_title("Australia.life.history")%>%
   ga.clean.names()
 
 
+test<-life.history%>%
+  select(fishing.type)%>%
+  dplyr::mutate(target.group=str_replace_all(.$fishing.type,c("R"="Recreational","C"="Commercial","B/"="","B"="Bycatch")))%>%
+  tidyr::replace_na(list(target.group="Non-target"))%>%
+  mutate(target.group = factor(target.group, levels = c("Commercial","Commercial/Recreational","Recreational","Bycatch","Non-target")))
+
+unique(test$target.group)
+
+str(test$target.group)
+
 # MAXN
 maxn<-read_fst("complete.maxn.fst")%>%
   glimpse()

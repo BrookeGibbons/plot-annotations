@@ -19,8 +19,6 @@ function(input, output, session) {
     req(input$complete.maxn)
     # read in fst data
     maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
-      dplyr::mutate(key="maxn")%>%
-      dplyr::mutate(value=maxn)%>%
       as.data.frame()
     
     options <- maxn.data %>%
@@ -29,11 +27,14 @@ function(input, output, session) {
       sort()
     
     options <- c("All", options)
+    
     updateSelectInput(session, "campaignid.selector", choices = options, selected = "All")
-    updateSelectInput(session, "assemblage.maxn.campaignid.selector", choices = options, selected = "All")
+    updateSelectInput(session, "assemblage.campaignid.selector", choices = options, selected = "All")
+    updateSelectInput(session, "metrics.maxn.campaignid.selector", choices = options, selected = "All")
+
   })
-  
-  
+    
+    
   observe({
     req(input$complete.length)
     # read in fst data
@@ -91,8 +92,7 @@ life.history<-  reactive({
       mutate(Commercial=str_detect(Fishing.type,"C"))%>%
       mutate(Recreational=str_detect(Fishing.type,"R"))%>%
       mutate(Bycatch=str_detect(Fishing.type,"B"))%>%
-      dplyr::select(Family,Genus,Species,RLS.trophic.group,Fishing.type,Commercial,Recreational,Bycatch)#%>%
-      #dplyr::rename('Trophic group'=RLS.trophic.group,'Target group'=Fishing.type)
+      dplyr::select(Family,Genus,Species,RLS.trophic.group,Fishing.type,Commercial,Recreational,Bycatch)
     
     life.history
     
@@ -132,98 +132,95 @@ life.history<-  reactive({
   
 # Create MaxN assemblage reactive data frame ----
 assemblage_maxn_data <- reactive({
-  req(input$assemblage.maxn.campaignid.selector)
+  req(input$assemblage.campaignid.selector)
+
+  maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
+    as.data.frame()
   
-  maxn <- fst::read_fst(input$complete.maxn$datapath)%>%
+  if (input$assemblage.campaignid.selector == "All") {
+    maxn.data
+
+  } else {
+    campaign.name <- input$assemblage.campaignid.selector
+    filter(maxn.data, campaignid == campaign.name)
+  }
+})
+
+assemblage_metric_data <- reactive({
+maxn <- assemblage_maxn_data()%>%
+  as.data.frame()
+
+total.abundance<-maxn%>%
+  dplyr::group_by(campaignid,sample,status,location,site,latitude,longitude)%>%
+  dplyr::summarise(total.abundance=sum(maxn))%>%
+  ungroup()%>%
+  mutate(metric="Total abundance")
+
+species.richness<-maxn%>%
+  filter(maxn>0)%>%
+  dplyr::group_by(campaignid,sample,status,location,site,latitude,longitude)%>%
+  dplyr::summarise(total.abundance=length(unique(scientific)))%>%
+  ungroup()%>%
+  mutate(metric="Species richness")
+
+assemblage <- bind_rows(total.abundance, species.richness)
+assemblage
+
+})
+
+# Create MaxN metric reactive data frame ----
+metric_maxn_data <- reactive({
+  req(input$metrics.maxn.campaignid.selector)
+  
+  maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
+    as.data.frame()
+  
+  if (input$metrics.maxn.campaignid.selector == "All") {
+    maxn.data
+    
+  } else {
+    campaign.name <- input$metrics.maxn.campaignid.selector
+    filter(maxn.data, campaignid == campaign.name)
+    maxn.data
+  }
+})
+
+maxn_metric_data <- reactive({
+  maxn <- metric_maxn_data()%>%
     as.data.frame()
   
   life.history<-life.history()
   
-  rec.target<-maxn%>%
-    #filter(maxn>0)%>%
-    left_join(life.history)%>%
-    filter(recreational==TRUE)%>%
-    dplyr::group_by(campaignid,sample,latitude,longitude)%>%
-    dplyr::summarise(total.abundance=sum(maxn))%>%
-    ungroup()%>%
-    arrange(-total.abundance)%>%
-    mutate(indicator="Abundance by target group")%>%
-    mutate(level="Recreational")
-  
-  com.target<-maxn%>%
-    #filter(maxn>0)%>%
-    left_join(life.history)%>%
-    filter(commercial==TRUE)%>%
-    dplyr::group_by(campaignid,sample,latitude,longitude)%>%
-    dplyr::summarise(total.abundance=sum(maxn))%>%
-    ungroup()%>%
-    arrange(-total.abundance)%>%
-    mutate(indicator="Abundance by target group")%>%
-    mutate(level="Commercial")
-  
-  com.target<-maxn%>%
-    #filter(maxn>0)%>%
-    left_join(life.history)%>%
-    filter(commercial==TRUE)%>%
-    dplyr::group_by(campaignid,sample,latitude,longitude)%>%
-    dplyr::summarise(total.abundance=sum(maxn))%>%
-    ungroup()%>%
-    arrange(-total.abundance)%>%
-    mutate(indicator="Abundance by target group")%>%
-    mutate(level="Commercial")
-  
-  bycatch.target<-maxn%>%
-    #filter(maxn>0)%>%
-    left_join(life.history)%>%
-    filter(bycatch==TRUE)%>%
-    dplyr::group_by(campaignid,sample,latitude,longitude)%>%
-    dplyr::summarise(total.abundance=sum(maxn))%>%
-    ungroup()%>%
-    arrange(-total.abundance)%>%
-    mutate(indicator="Abundance by target group")%>%
-    mutate(level="Bycatch")
-  
-  unique(life.history$trophic.group)
-  
   trophic<-maxn%>%
-    #filter(maxn>0)%>%
-    left_join(life.history)%>%
-    dplyr::group_by(campaignid,sample,latitude,longitude,trophic.group)%>%
+    dplyr::rename(Family=family,Genus=genus,Species=species)%>%
+    left_join(.,life.history)%>%
+    dplyr::rename(trophic.group=RLS.trophic.group)%>%
+    dplyr::group_by(campaignid,sample,status,location,site,latitude,longitude,trophic.group)%>%
     dplyr::summarise(total.abundance=sum(maxn))%>%
     ungroup()%>%
-    arrange(-total.abundance)%>%
     replace_na(list(trophic.group="missing trophic group"))%>%
-    mutate(indicator="Abundance by trophic group")%>%
-    dplyr::rename(level=trophic.group)
+    dplyr::mutate(metric="Trophic group")%>%
+    dplyr::rename(level=trophic.group)%>%
+    glimpse()
   
-  total.abundance<-maxn%>%
+  target<-maxn%>%
+    dplyr::rename(Family=family,Genus=genus,Species=species)%>%
     left_join(life.history)%>%
-    dplyr::group_by(campaignid,sample,latitude,longitude)%>%
+    dplyr::mutate(target.group=str_replace_all(.$Fishing.type,c("R"="Recreational","C"="Commercial","B/"="","B"="Bycatch")))%>%
+    tidyr::replace_na(list(target.group="Non-target"))%>%
+    mutate(target.group = factor(target.group, levels = c("Commercial","Commercial/Recreational","Recreational","Bycatch","Non-target")))%>%
+    mutate(target.group = fct_relevel(target.group, "Commercial","Commercial/Recreational","Recreational","Bycatch","Non-target")) %>%
+    dplyr::group_by(campaignid,sample,status,location,site,latitude,longitude,target.group)%>%
     dplyr::summarise(total.abundance=sum(maxn))%>%
     ungroup()%>%
-    arrange(-total.abundance)%>%
-    mutate(indicator="Total abundance")
+    dplyr::mutate(metric="Target group")%>%
+    dplyr::rename(level=target.group)%>%
+    glimpse()
   
-  species.richness<-maxn%>%
-    filter(maxn>0)%>%
-    left_join(life.history)%>%
-    dplyr::group_by(campaignid,sample,latitude,longitude)%>%
-    dplyr::summarise(total.abundance=length(unique(scientific)))%>%
-    ungroup()%>%
-    arrange(-total.abundance)%>%
-    mutate(indicator="Species richness")
+  metric.dat <- bind_rows(trophic, target)
+  metric.dat
   
-  assemblage <- bind_rows(rec.target, com.target, bycatch.target, trophic, total.abundance, species.richness)
-  
-  if (input$assemblage.maxn.campaignid.selector == "All") {
-    assemblage
-    
-  } else {
-    campaign.name <- input$assemblage.maxn.campaignid.selector
-    filter(assemblage, campaignid == campaign.name)
-  }
 })
-
 
   # Create Length reactive data frame ----
   length_campaignid_data <- reactive({
@@ -648,52 +645,156 @@ assemblage_maxn_data <- reactive({
 
   # Maxn Status ----
   output$status.plot <- renderPlot({
-    ggplot(trends_data(),aes(x = factor(status), y = maxn, colour = status, fill = status,notch=FALSE, outlier.shape = NA)) + 
-      #scale_fill_manual("",values=c("No-take"="lightgrey","Fished"="lightgrey"))+
-      theme( panel.background = element_blank(),axis.line = element_line(colour = "black"))+
-      stat_boxplot(geom='errorbar')+
-      geom_boxplot(outlier.color = NA, notch=FALSE)+
-      stat_summary(fun.y=mean, geom="point", shape=23, size=4)+ #this is adding the dot for the mean
+    
+    maxn.per.sample<-trends_data()%>%
+      group_by(campaignid,sample,status)%>%
+      summarise(maxn=sum(maxn))
+    
+    ggplot(maxn.per.sample, aes(x = status,y=maxn)) + 
+      stat_summary(fun.y=mean, geom="bar",fill="white",colour="black") +
+      stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1) +
+      geom_hline(aes(yintercept=0))+
+      xlab("")+
+      ylab("Average abundance per stereo-BRUV \n(+/- SE)")+
       theme_bw()+
-      Theme1+
-      xlab("Status") + ylab("Abundance per stereo-BRUV") +
-      theme_bw() +
+      Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
       ggtitle("Plot of abundance by Status")
   })
   
   # maxn Location ----
   
   output$location.plot <- renderPlot({
-    ggplot(trends_data(),aes(x = factor(location), y = maxn, colour = location, fill = location,notch=FALSE, outlier.shape = NA)) + 
-      #scale_fill_manual("",values=c("No-take"="lightgrey","Fished"="lightgrey"))+
-      theme( panel.background = element_blank(),axis.line = element_line(colour = "black"))+
-      stat_boxplot(geom='errorbar')+
-      geom_boxplot(outlier.color = NA, notch=FALSE)+
-      stat_summary(fun.y=mean, geom="point", shape=23, size=4)+ #this is adding the dot for the mean
+    
+    maxn.per.sample<-trends_data()%>%
+      group_by(campaignid,sample,location)%>%
+      summarise(maxn=sum(maxn))
+    
+    ggplot(maxn.per.sample, aes(x = location,y=maxn)) + 
+      stat_summary(fun.y=mean, geom="bar",fill="white",colour="black") +
+      stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1) +
+      geom_hline(aes(yintercept=0))+
+      xlab("")+
+      ylab("Average abundance per stereo-BRUV \n(+/- SE)")+
       theme_bw()+
-      Theme1+
-      xlab("Location") + ylab("Abundance per stereo-BRUV") +
-      ggtitle("Plot of abundance by Location") +
-      theme_bw() +
-      Theme1
+      Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
+      ggtitle("Plot of abundance by Location")
+    
   })
   
   # Maxn Site ----
   output$site.plot <- renderPlot({
-    ggplot(trends_data(),aes(x = factor(site), y = maxn, colour = site, fill = site,notch=FALSE, outlier.shape = NA)) + 
-      #scale_fill_manual("",values=c("No-take"="lightgrey","Fished"="lightgrey"))+
-      theme( panel.background = element_blank(),axis.line = element_line(colour = "black"))+
-      stat_boxplot(geom='errorbar')+
-      geom_boxplot(outlier.color = NA, notch=FALSE)+
-      stat_summary(fun.y=mean, geom="point", shape=23, size=4)+ #this is adding the dot for the mean
+    maxn.per.sample<-trends_data()%>%
+      group_by(campaignid,sample,site)%>%
+      summarise(maxn=sum(maxn))
+    
+    ggplot(maxn.per.sample, aes(x = site,y=maxn)) + 
+      stat_summary(fun.y=mean, geom="bar",fill="white",colour="black") +
+      stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1) +
+      geom_hline(aes(yintercept=0))+
+      xlab("")+
+      ylab("Average abundance per stereo-BRUV \n(+/- SE)")+
       theme_bw()+
-      Theme1+
-      xlab("Site") + ylab("Abundance per stereo-BRUV") +
-      ggtitle("Plot of abundance by Site")+
-      theme_bw() +
-      Theme1
+      Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
+      ggtitle("Plot of abundance by Site")
   })
   
+
+# # make drop down for metrics
+# observe({
+#   req(input$complete.maxn)
+#   # read in fst data
+#   maxn.data <- assemblage_metric_data()%>%
+#     as.data.frame()
+#   
+#   options <- maxn.data %>%
+#     dplyr::distinct(metric) %>% 
+#     pull("metric")%>%
+#     sort()
+#   
+#   updateSelectInput(session, "assemblage.maxn.metric.selector", choices = options, selected = "Total abundance")
+#   
+# })
+
+
+# Maxn assemblage Status ----
+output$assemblage.maxn.status.plot <- renderPlot({
+  
+  maxn.per.sample<-assemblage_metric_data()%>%
+    as.data.frame()%>%
+    filter(metric == input$assemblage.maxn.metric.selector)%>%
+    glimpse()
+  
+  ggplot(maxn.per.sample, aes(x = status,y=total.abundance)) + 
+    stat_summary(fun.y=mean, geom="bar",fill="white",colour="black") +
+    stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1) +
+    geom_hline(aes(yintercept=0))+
+    xlab("")+
+    ylab("Per stereo-BRUV \n(+/- SE)")+
+    theme_bw()+
+    Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
+    ggtitle("Plot of abundance by Status")
+})
+
+# maxn Location ----
+
+output$assemblage.maxn.location.plot <- renderPlot({
+  
+  maxn.per.sample<-assemblage_metric_data()%>%
+    as.data.frame()%>%
+    filter(metric == input$assemblage.maxn.metric.selector)%>%
+    glimpse()
+  
+  ggplot(maxn.per.sample, aes(x = location,y=total.abundance)) + 
+    stat_summary(fun.y=mean, geom="bar",fill="white",colour="black") +
+    stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1) +
+    geom_hline(aes(yintercept=0))+
+    xlab("")+
+    ylab("Per stereo-BRUV \n(+/- SE)")+
+    theme_bw()+
+    Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
+    ggtitle("Plot of abundance by Location")
+  
+})
+
+# Maxn Site ----
+output$assemblage.maxn.site.plot <- renderPlot({
+  maxn.per.sample<-assemblage_metric_data()%>%
+    as.data.frame()%>%
+    filter(metric == input$assemblage.maxn.metric.selector)%>%
+    glimpse()
+  
+  ggplot(maxn.per.sample, aes(x = site,y=total.abundance)) + 
+    stat_summary(fun.y=mean, geom="bar",fill="white",colour="black") +
+    stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1) +
+    geom_hline(aes(yintercept=0))+
+    xlab("")+
+    ylab("Per stereo-BRUV \n(+/- SE)")+
+    theme_bw()+
+    Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
+    ggtitle("Plot of abundance by Site")
+})
+
+# Maxn metric Status ----
+output$metrics.maxn.status.plot <- renderPlot({
+  
+  maxn.per.sample<-maxn_metric_data()%>%
+    as.data.frame()%>%
+    filter(metric == input$metrics.maxn.metric.selector)%>%
+    glimpse()
+  
+  posn.d <- position_dodge(0.9)
+    
+    ggplot(maxn.per.sample, aes(x = level, y=total.abundance, fill=status, group=status)) + 
+      stat_summary(fun.y=mean, geom="bar",colour="black",position="dodge") +
+      stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1,position=posn.d) +
+      geom_hline(aes(yintercept=0))+
+      xlab("")+
+      ylab("Per stereo-BRUV \n(+/- SE)")+
+      theme_bw()+
+      Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
+      ggtitle("Plot of abundance by Status")
+})
+
   # Length histogram ----
   output$length.histogram <- renderPlot({
     ggplot(length_trends_data(),aes(x = length,colour = status,fill=status))+
@@ -757,6 +858,42 @@ assemblage_maxn_data <- reactive({
           data = equalzero, lat = ~ latitude, lng = ~ longitude,
           radius = 2, fillOpacity = 0.5, color = "white",stroke = FALSE,
           label = ~as.character(maxn)
+        )
+    }
+    map
+  })
+  
+  
+  # Maxn Assemblage Spatial plot ----
+  # Create spatial plot
+  output$assemblage.maxn.spatial.plot <- renderLeaflet({
+    
+    data<-assemblage_metric_data()%>%
+      as.data.frame()%>%
+      filter(metric == input$assemblage.maxn.metric.selector)%>%
+      glimpse()
+    
+    map <- leaflet(data) %>%
+      addTiles()%>%
+      fitBounds(~min(longitude), ~min(latitude), ~max(longitude), ~max(latitude))
+    
+    overzero <- filter(data, total.abundance > 0)
+    equalzero <- filter(data, total.abundance == 0)
+    
+    if (nrow(overzero)) {
+      map <- map %>%
+        addCircleMarkers(
+          data = overzero, lat = ~ latitude, lng = ~ longitude,
+          radius = ~((total.abundance/max(total.abundance))*15), fillOpacity = 0.5, stroke = FALSE,
+          label = ~as.character(total.abundance)
+        )
+    }
+    if (nrow(equalzero)) {
+      map <- map %>%
+        addCircleMarkers(
+          data = equalzero, lat = ~ latitude, lng = ~ longitude,
+          radius = 2, fillOpacity = 0.5, color = "white",stroke = FALSE,
+          label = ~as.character(total.abundance)
         )
     }
     map
@@ -941,23 +1078,65 @@ assemblage_maxn_data <- reactive({
   length.summary.data <- reactive({
     life.history<-life.history()
     
-    length.data <- fst::read_fst(input$complete.length$datapath)%>%
-      as.data.frame()%>%
-      filter(length>0)%>%
-      dplyr::group_by(family,genus,species)%>%
-      dplyr::summarise(Total.measured=sum(number),Number.of.samples=length(unique(id)),Mean.length=mean(length),Min.length=min(length),Max.length=max(length))%>%
-      mutate(Mean.length=round(Mean.length, digits=2))%>%
-      mutate(Min.length=round(Min.length, digits=2))%>%
-      mutate(Max.length=round(Max.length, digits=2))%>%
-      ungroup()%>%
-      arrange(-Total.measured)%>%
-      dplyr::rename(Family=family,Genus=genus,Species=species)%>%
-      dplyr::rename('Total measured'=Total.measured,'Number of samples'=Number.of.samples,'Mean length'=Mean.length,'Min length'=Min.length,'Max length'=Max.length)%>%
-      left_join(.,life.history)
+    if (input$length.summary.groupby=="Species") {
+      length.data <- fst::read_fst(input$complete.length$datapath)%>%
+        as.data.frame()%>%
+        filter(length>0)%>%
+        dplyr::group_by(family,genus,species)%>%
+        dplyr::summarise(Total.measured=sum(number),Number.of.samples=length(unique(id)),Mean.length=mean(length),Min.length=min(length),Max.length=max(length))%>%
+        mutate(Mean.length=round(Mean.length, digits=2))%>%
+        mutate(Min.length=round(Min.length, digits=2))%>%
+        mutate(Max.length=round(Max.length, digits=2))%>%
+        ungroup()%>%
+        arrange(-Total.measured)%>%
+        dplyr::rename(Family=family,Genus=genus,Species=species)%>%
+        dplyr::rename('Total measured'=Total.measured,'Number of samples'=Number.of.samples,'Mean length'=Mean.length,'Min length'=Min.length,'Max length'=Max.length)%>%
+        left_join(.,life.history)%>%
+        dplyr::rename('Trophic group'=RLS.trophic.group,"Target group"=Fishing.type)
+    
+    }
+    
+    if (input$length.summary.groupby=="Target group") {
+      length.data <- fst::read_fst(input$complete.length$datapath)%>%
+        as.data.frame()%>%
+        filter(length>0)%>%
+        dplyr::rename(Family=family,Genus=genus,Species=species)%>%
+        left_join(life.history)%>%
+        dplyr::mutate(target.group=str_replace_all(.$Fishing.type,c("R"="Recreational","C"="Commercial","B/"="","B"="Bycatch")))%>%
+        tidyr::replace_na(list(target.group="Non-target"))%>%
+        dplyr::group_by(target.group)%>%
+        dplyr::summarise(Total.measured=sum(number),Number.of.samples=length(unique(id)),Mean.length=mean(length),Min.length=min(length),Max.length=max(length))%>%
+        mutate(Mean.length=round(Mean.length, digits=2))%>%
+        mutate(Min.length=round(Min.length, digits=2))%>%
+        mutate(Max.length=round(Max.length, digits=2))%>%
+        ungroup()%>%
+        arrange(-Total.measured)%>%
+        dplyr::rename('Total measured'=Total.measured,'Number of samples'=Number.of.samples,'Mean length'=Mean.length,'Min length'=Min.length,'Max length'=Max.length,'Target group'=target.group)
+    }
+    
+    if (input$length.summary.groupby=="Trophic group") {
+      length.data <- fst::read_fst(input$complete.length$datapath)%>%
+        as.data.frame()%>%
+        filter(length>0)%>%
+        dplyr::rename(Family=family,Genus=genus,Species=species)%>%
+        left_join(life.history)%>%
+        dplyr::rename(trophic.group=RLS.trophic.group)%>%
+        tidyr::replace_na(list(trophic.group="No trophic group"))%>%
+        dplyr::group_by(trophic.group)%>%
+        dplyr::summarise(Total.measured=sum(number),Number.of.samples=length(unique(id)),Mean.length=mean(length),Min.length=min(length),Max.length=max(length))%>%
+        mutate(Mean.length=round(Mean.length, digits=2))%>%
+        mutate(Min.length=round(Min.length, digits=2))%>%
+        mutate(Max.length=round(Max.length, digits=2))%>%
+        ungroup()%>%
+        arrange(-Total.measured)%>%
+        dplyr::rename('Total measured'=Total.measured,'Number of samples'=Number.of.samples,'Mean length'=Mean.length,'Min length'=Min.length,'Max length'=Max.length, 'Trophic group'=trophic.group)
+      
+    }
+    length.data 
   })
   
   output$length.summary <- DT::renderDataTable(
-    DT::datatable(length.summary.data()[, input$length_show_vars, drop = FALSE], options = list( #
+    DT::datatable(length.summary.data(), options = list( #
       lengthMenu = list(c(10, 25, 50, -1), c('10', '25','50', 'All')),
       pageLength = 15, rownames= FALSE,digits=2)
     )
