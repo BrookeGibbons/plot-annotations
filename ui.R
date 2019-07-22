@@ -178,11 +178,12 @@ navbarPage(
         # Select CampaignID
         selectInput(inputId = "mass.campaignid.selector", label = "CampaignID",
                     choices = NULL),
-        htmlOutput("mass.metric.selector")),
+        selectInput("mass.group.selector", "Select group to plot by:", choices = c("Target group","Trophic group"), multiple = FALSE),
+        selectInput("mass.metric.selector", "Select metric to plot:", choices = c("Total mass of all fish","Mass of all fish greater than 200 mm","Mass of all fish greater than 300 mm"), multiple = FALSE)),
       
       # Plots
       mainPanel(
-        plotOutput(outputId = "mass.status", height = "300px"),
+        plotOutput(outputId = "mass.status", height = "500px"),
         leafletOutput(outputId = "mass.spatial.plot", height = "500px")
       )
     )

@@ -170,7 +170,7 @@ assemblage
 })
 
 # Create MaxN metric reactive data frame ----
-metric_maxn_data <- reactive({
+metric_data <- reactive({
   req(input$metrics.maxn.campaignid.selector)
   
   maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
@@ -182,13 +182,20 @@ metric_maxn_data <- reactive({
   } else {
     campaign.name <- input$metrics.maxn.campaignid.selector
     filter(maxn.data, campaignid == campaign.name)
-    maxn.data
   }
 })
 
 maxn_metric_data <- reactive({
-  maxn <- metric_maxn_data()%>%
+  maxn <- metric_data()%>%
     as.data.frame()
+  
+  if (input$metrics.maxn.campaignid.selector == "All") {
+    maxn<-maxn
+    
+  } else {
+    campaign.name <- input$metrics.maxn.campaignid.selector
+    filter(maxn, campaignid == campaign.name)
+  }
   
   life.history<-life.history()
   
@@ -237,7 +244,6 @@ metric_length <- reactive({
   } else {
     campaign.name <- input$length.metric.campaignid.selector
     filter(length.data, campaignid == campaign.name)
-    length.data
   }
 })
 
@@ -856,7 +862,7 @@ output$length.metric.status <- renderPlot({
     filter(metric == input$length.metric.selector)%>%
     glimpse()
   
-  posn.d <- position_dodge(0.9)
+  posn.d <- position_dodge(0.75)
   
 
   ggplot(length.metric,aes(x = level, y = length, fill=status, notch=FALSE, outlier.shape = NA)) + 
@@ -870,6 +876,113 @@ output$length.metric.status <- renderPlot({
     Theme1+
     theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))
     
+})
+
+
+# mass metric Status ----
+output$mass.status <- renderPlot({
+
+  req(input$mass.campaignid.selector)
+  
+  mass.data <- fst::read_fst(input$complete.mass$datapath)%>%
+    as.data.frame()
+  
+  if (input$mass.campaignid.selector == "All") {
+    mass.data<-mass.data
+    
+  } else {
+    campaign.name <- input$mass.campaignid.selector
+    filter(mass.data, campaignid == campaign.name)
+  }
+
+life.history<-life.history()%>%
+  ga.clean.names()%>%
+  dplyr::mutate(fishing.type=str_replace_all(.$fishing.type,c("R"="Recreational","C"="Commercial","B/"=NA,"B"="Bycatch","Commercial/Recreational"="Target","Commercial"="Target","Recreational"="Target","NA"=NA)))%>%
+  mutate(fishing.type = factor(fishing.type, levels = c("Target","Bycatch","Non-target")))%>%
+  mutate(fishing.type = fct_relevel(fishing.type, "Target","Bycatch","Non-target"))%>%
+  tidyr::replace_na(list(fishing.type="Non-target"))
+
+if (input$mass.group.selector == "Target group") {
+
+over.200<-mass.data%>%
+  left_join(.,life.history)%>%
+  filter(length>=200)%>%
+  tidyr::replace_na(list(fishing.type="Non-target"))%>%
+  dplyr::group_by(campaignid,sample,status,fishing.type)%>%
+  dplyr::summarise(total.mass=sum(mass.g))%>%
+  dplyr::mutate(metric="Mass of all fish greater than 200 mm")%>%
+  replace_na(list(total.mass=0))%>%
+  dplyr::rename(level=fishing.type)%>%
+  glimpse()
+
+over.300<-mass.data%>%
+  left_join(.,life.history)%>%
+  filter(length>=300)%>%
+  tidyr::replace_na(list(fishing.type="Non-target"))%>%
+  dplyr::group_by(campaignid,sample,status,fishing.type)%>%
+  dplyr::summarise(total.mass=sum(mass.g))%>%
+  dplyr::mutate(metric="Mass of all fish greater than 300 mm")%>%
+  replace_na(list(total.mass=0))%>%
+  dplyr::rename(level=fishing.type)%>%
+  glimpse()
+
+total.mass<-mass.data%>%
+  left_join(.,life.history)%>%
+  filter(length>0)%>%
+  tidyr::replace_na(list(fishing.type="Non-target"))%>%
+  dplyr::group_by(campaignid,sample,status,fishing.type)%>%
+  dplyr::summarise(total.mass=sum(mass.g))%>%
+  dplyr::mutate(metric="Total mass of all fish")%>%
+  replace_na(list(total.mass=0))%>%
+  dplyr::rename(level=fishing.type)%>%
+  glimpse()
+
+} else {
+  over.200<-mass.data%>%
+    left_join(.,life.history)%>%
+    filter(length>=200)%>%
+    dplyr::group_by(campaignid,sample,status,rls.trophic.group)%>%
+    dplyr::summarise(total.mass=sum(mass.g))%>%
+    dplyr::mutate(metric="Mass of all fish greater than 200 mm")%>%
+    replace_na(list(total.mass=0))%>%
+    dplyr::rename(level=rls.trophic.group)
+  
+  over.300<-mass.data%>%
+    left_join(.,life.history)%>%
+    filter(length>=300)%>%
+    dplyr::group_by(campaignid,sample,status,rls.trophic.group)%>%
+    dplyr::summarise(total.mass=sum(mass.g))%>%
+    dplyr::mutate(metric="Mass of all fish greater than 300 mm")%>%
+    replace_na(list(total.mass=0))%>%
+    dplyr::rename(level=rls.trophic.group)
+  
+  total.mass<-mass.data%>%
+    left_join(.,life.history)%>%
+    filter(length>0)%>%
+    dplyr::group_by(campaignid,sample,status,rls.trophic.group)%>%
+    dplyr::summarise(total.mass=sum(mass.g))%>%
+    dplyr::mutate(metric="Total mass of all fish")%>%
+    replace_na(list(total.mass=0))%>%
+    dplyr::rename(level=rls.trophic.group)
+}
+
+mass.metrics<-bind_rows(over.200,over.300,total.mass)%>%
+  filter(metric==input$mass.metric.selector)
+
+posn.d <- position_dodge(0.75)
+
+
+ggplot(mass.metrics,aes(x = level, y = total.mass, fill=status, notch=FALSE, outlier.shape = NA)) + 
+  stat_boxplot(geom='errorbar')+
+  geom_boxplot(outlier.color = NA, notch=FALSE)+
+  stat_summary(fun.y=mean, geom="point", shape=23, size=4, position=posn.d)+ #this is adding the dot for the mean
+  theme_bw()+
+  xlab("") + ylab("Mass (g)") +
+  ggtitle("Plot of mass by Status") +
+  theme_bw()+
+  Theme1+
+  theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))
+
 })
 
 
@@ -1241,5 +1354,10 @@ output$length.metric.status <- renderPlot({
     )
   )
 
+  
+  
+  
+  
+  
   
 }

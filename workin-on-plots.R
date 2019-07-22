@@ -123,5 +123,40 @@ ggplot(length.metric,aes(x = factor(level), y = length, fill=status,notch=FALSE,
   theme_bw() +
   Theme1
 
+mass<-read_fst("complete.mass.fst")%>%
+  glimpse()
+
+life.history<-life.history()
+
+over.200<-mass%>%
+  left_join(.,life.history)%>%
+  filter(length>=200)%>%
+  dplyr::group_by(campaignid,sample,status)%>%
+  dplyr::summarise(total.mass=sum(mass.g))%>%
+  dplyr::mutate(metric="over.200")%>%
+  replace_na(list(total.mass=0))
+
+over.300<-mass%>%
+  left_join(.,life.history)%>%
+  filter(length>=300)%>%
+  dplyr::group_by(campaignid,sample,status)%>%
+  dplyr::summarise(total.mass=sum(mass.g))%>%
+  dplyr::mutate(metric="over.300")%>%
+  replace_na(list(total.mass=0))
+
+total.mass<-mass%>%
+  left_join(.,life.history)%>%
+  filter(length>0)%>%
+  dplyr::group_by(campaignid,sample,status)%>%
+  dplyr::summarise(total.mass=sum(mass.g))%>%
+  dplyr::mutate(metric="total.mass")%>%
+  replace_na(list(total.mass=0))
+
+mass.metrics<-bind_rows(over.200,over.300,total.mass)
+
+
+
+
+
 
 
