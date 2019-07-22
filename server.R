@@ -50,6 +50,7 @@ function(input, output, session) {
     
     options <- c("All", options)
     updateSelectInput(session, "length.campaignid.selector", choices = options, selected = "All")
+    updateSelectInput(session, "length.metric.campaignid.selector", choices = options, selected = "All")
   })
   
   observe({
@@ -208,8 +209,9 @@ maxn_metric_data <- reactive({
     left_join(life.history)%>%
     dplyr::mutate(target.group=str_replace_all(.$Fishing.type,c("R"="Recreational","C"="Commercial","B/"="","B"="Bycatch")))%>%
     tidyr::replace_na(list(target.group="Non-target"))%>%
-    mutate(target.group = factor(target.group, levels = c("Commercial","Commercial/Recreational","Recreational","Bycatch","Non-target")))%>%
-    mutate(target.group = fct_relevel(target.group, "Commercial","Commercial/Recreational","Recreational","Bycatch","Non-target")) %>%
+    dplyr::mutate(target.group=str_replace_all(.$target.group,c("Commercial/Recreational"="Target","Commercial"="Target","Recreational"="Target")))%>%
+    mutate(target.group = factor(target.group, levels = c("Target","Bycatch","Non-target")))%>%
+    mutate(target.group = fct_relevel(target.group, "Target","Bycatch","Non-target")) %>%
     dplyr::group_by(campaignid,sample,status,location,site,latitude,longitude,target.group)%>%
     dplyr::summarise(total.abundance=sum(maxn))%>%
     ungroup()%>%
@@ -221,6 +223,57 @@ maxn_metric_data <- reactive({
   metric.dat
   
 })
+
+# Create Length metric reactive data frame ----
+metric_length <- reactive({
+  req(input$length.metric.campaignid.selector)
+  
+  length.data <- fst::read_fst(input$complete.length$datapath)%>%
+    as.data.frame()
+  
+  if (input$length.metric.campaignid.selector == "All") {
+    length.data
+    
+  } else {
+    campaign.name <- input$length.metric.campaignid.selector
+    filter(length.data, campaignid == campaign.name)
+    length.data
+  }
+})
+
+
+metric_length_data <- reactive({
+  length <- metric_length()%>%
+    as.data.frame()
+  
+  life.history<-life.history()
+  
+  trophic<-length%>%
+    dplyr::rename(Family=family,Genus=genus,Species=species)%>%
+    left_join(.,life.history)%>%
+    dplyr::rename(trophic.group=RLS.trophic.group)%>%
+    replace_na(list(trophic.group="missing trophic group"))%>%
+    dplyr::mutate(metric="Trophic group")%>%
+    dplyr::rename(level=trophic.group)%>%
+    glimpse()
+  
+  target<-length%>%
+    dplyr::rename(Family=family,Genus=genus,Species=species)%>%
+    left_join(life.history)%>%
+    dplyr::mutate(target.group=str_replace_all(.$Fishing.type,c("R"="Recreational","C"="Commercial","B/"="","B"="Bycatch")))%>%
+    tidyr::replace_na(list(target.group="Non-target"))%>%
+    dplyr::mutate(target.group=str_replace_all(.$target.group,c("Commercial/Recreational"="Target","Commercial"="Target","Recreational"="Target")))%>%
+    mutate(target.group = factor(target.group, levels = c("Target","Bycatch","Non-target")))%>%
+    mutate(target.group = fct_relevel(target.group, "Target","Bycatch","Non-target")) %>%
+    dplyr::mutate(metric="Target group")%>%
+    dplyr::rename(level=target.group)%>%
+    glimpse()
+  
+  metric.dat <- bind_rows(trophic, target)
+  metric.dat
+  
+})
+
 
   # Create Length reactive data frame ----
   length_campaignid_data <- reactive({
@@ -650,8 +703,8 @@ maxn_metric_data <- reactive({
       group_by(campaignid,sample,status)%>%
       summarise(maxn=sum(maxn))
     
-    ggplot(maxn.per.sample, aes(x = status,y=maxn)) + 
-      stat_summary(fun.y=mean, geom="bar",fill="white",colour="black") +
+    ggplot(maxn.per.sample, aes(x = status,y=maxn, fill = status)) + 
+      stat_summary(fun.y=mean, geom="bar",colour="black") +
       stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1) +
       geom_hline(aes(yintercept=0))+
       xlab("")+
@@ -724,8 +777,8 @@ output$assemblage.maxn.status.plot <- renderPlot({
     filter(metric == input$assemblage.maxn.metric.selector)%>%
     glimpse()
   
-  ggplot(maxn.per.sample, aes(x = status,y=total.abundance)) + 
-    stat_summary(fun.y=mean, geom="bar",fill="white",colour="black") +
+  ggplot(maxn.per.sample, aes(x = status,y=total.abundance, fill = status)) + 
+    stat_summary(fun.y=mean, geom="bar",colour="black") +
     stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1) +
     geom_hline(aes(yintercept=0))+
     xlab("")+
@@ -794,6 +847,31 @@ output$metrics.maxn.status.plot <- renderPlot({
       Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
       ggtitle("Plot of abundance by Status")
 })
+
+# length metric Status ----
+output$length.metric.status <- renderPlot({
+  
+  length.metric<-metric_length_data()%>%
+    as.data.frame()%>%
+    filter(metric == input$length.metric.selector)%>%
+    glimpse()
+  
+  posn.d <- position_dodge(0.9)
+  
+
+  ggplot(length.metric,aes(x = level, y = length, fill=status, notch=FALSE, outlier.shape = NA)) + 
+    stat_boxplot(geom='errorbar')+
+    geom_boxplot(outlier.color = NA, notch=FALSE)+
+    stat_summary(fun.y=mean, geom="point", shape=23, size=4, position=posn.d)+ #this is adding the dot for the mean
+    theme_bw()+
+    xlab("") + ylab("Length (mm)") +
+    ggtitle("Plot of length by Status") +
+    theme_bw()+
+    Theme1+
+    theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))
+    
+})
+
 
   # Length histogram ----
   output$length.histogram <- renderPlot({
@@ -897,6 +975,24 @@ output$metrics.maxn.status.plot <- renderPlot({
         )
     }
     map
+  })
+  
+  
+  
+# Length plots ----
+
+  output$length.status.plot <- renderPlot({
+    
+  ggplot(length_trends_data(),aes(x = factor(status), y = length,  fill = status, notch=FALSE, outlier.shape = NA),alpha=0.5) + 
+    theme( panel.background = element_blank(),axis.line = element_line(colour = "black"))+
+    stat_boxplot(geom='errorbar')+
+    geom_boxplot(outlier.color = NA, notch=FALSE)+
+    stat_summary(fun.y=mean, geom="point", shape=23, size=4)+ #this is adding the dot for the mean
+    theme_bw()+
+    Theme1+
+    xlab("Status") + ylab("Length (mm)") +
+    theme_bw() +
+    Theme1
   })
   
 ## Habitat spatial plot ----
@@ -1022,9 +1118,10 @@ output$metrics.maxn.status.plot <- renderPlot({
       filter(maxn>0)%>%
       dplyr::rename(Family=family,Genus=genus,Species=species)%>%
       left_join(.,life.history)%>%
-      dplyr::rename(target.group=Fishing.type)%>%
-      dplyr::mutate(target.group=str_replace_all(.$target.group,c("R"="Recreational","C"="Commercial","B/"="","B"=NA)))%>%
+      #dplyr::rename(target.group=Fishing.type)%>%
+      dplyr::mutate(target.group=str_replace_all(.$Fishing.type,c("R"="Recreational","C"="Commercial","B/"="","B"="Bycatch")))%>%
       tidyr::replace_na(list(target.group="Non-target"))%>%
+      dplyr::mutate(target.group=str_replace_all(.$target.group,c("Commercial/Recreational"="Target","Commercial"="Target","Recreational"="Target")))%>%
       dplyr::group_by(target.group)%>%
       dplyr::summarise(Total.abundance=sum(maxn),Number.of.samples=length(unique(id)))%>%
       ungroup()%>%
@@ -1102,7 +1199,9 @@ output$metrics.maxn.status.plot <- renderPlot({
         filter(length>0)%>%
         dplyr::rename(Family=family,Genus=genus,Species=species)%>%
         left_join(life.history)%>%
-        dplyr::mutate(target.group=str_replace_all(.$Fishing.type,c("R"="Recreational","C"="Commercial","B/"="","B"="Bycatch")))%>%
+        dplyr::rename(target.group=Fishing.type)%>%
+        dplyr::mutate(target.group=str_replace_all(.$target.group,c("R"="Recreational","C"="Commercial","B/"="","B"=NA)))%>%
+        dplyr::mutate(target.group=str_replace_all(.$target.group,c("Commercial/Recreational"="Target","Commercial"="Target","Recreational"="Target")))%>%
         tidyr::replace_na(list(target.group="Non-target"))%>%
         dplyr::group_by(target.group)%>%
         dplyr::summarise(Total.measured=sum(number),Number.of.samples=length(unique(id)),Mean.length=mean(length),Min.length=min(length),Max.length=max(length))%>%

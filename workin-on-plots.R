@@ -1,3 +1,7 @@
+setwd("C:/GitHub/plot-annotations/Example data")
+dir()
+
+# Habitat plots ----
 tilesURL <- "http://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
 
 basemap <- leaflet(width = "100%", height = "400px") %>%
@@ -58,6 +62,8 @@ habitat.lite<-habitat%>%
 # Gather habitat to bubble plot easier
 test<-gather(habitat.lite,"biota.ascidians","biota.consolidated","biota.crinoids","biota.hydroids","biota.invertebrate.complex","biota.macroalgae","biota.octocoral.black","biota.seagrasses","biota.sponges","biota.stony.corals","biota.unconsolidated",key="habitat.type",value="percent.cover")
 
+
+# Maxn plots -----
 names(maxn)
 
 
@@ -83,3 +89,39 @@ ggplot(maxn.per.sample, aes(x = status,y=maxn)) +
   ylab("Average abundance per drop (+/- SE)")+
   theme_bw()+
   Theme1+theme(panel.grid = element_blank(), panel.border = element_blank())
+
+# LENGTH ----
+length<-read_fst("complete.length.fst")%>%
+  glimpse()
+
+ggplot(length,aes(x = factor(status), y = length,  fill = status,notch=FALSE, outlier.shape = NA),alpha=0.5) + 
+  #scale_fill_manual("",values=c("No-take"="lightgrey","Fished"="lightgrey"))+
+  theme( panel.background = element_blank(),axis.line = element_line(colour = "black"))+
+  stat_boxplot(geom='errorbar')+
+  geom_boxplot(outlier.color = NA, notch=FALSE)+
+  stat_summary(fun.y=mean, geom="point", shape=23, size=4)+ #this is adding the dot for the mean
+  theme_bw()+
+  Theme1+
+  xlab("Location") + ylab("Abundance per stereo-BRUV") +
+  ggtitle("Plot of abundance by Location") +
+  theme_bw() +
+  Theme1
+
+length.metric<-length%>%
+  left_join(.,life.history)%>%
+  mutate(level=rls.trophic.group)
+
+ggplot(length.metric,aes(x = factor(level), y = length, fill=status,notch=FALSE, outlier.shape = NA)) + 
+  theme( panel.background = element_blank(),axis.line = element_line(colour = "black"))+
+  stat_boxplot(geom='errorbar')+
+  geom_boxplot(outlier.color = NA, notch=FALSE)+
+  stat_summary(fun.y=mean, geom="point", shape=23, size=4,position=posn.d)+ #this is adding the dot for the mean
+  theme_bw()+
+  Theme1+
+  xlab("") + ylab("Length (mm)") +
+  ggtitle("Plot of length by Status") +
+  theme_bw() +
+  Theme1
+
+
+

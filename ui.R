@@ -105,10 +105,7 @@ navbarPage(
                     choices = NULL),
         selectInput("metrics.maxn.metric.selector", "Select metric to plot", choices = c("Target group","Trophic group"), multiple = FALSE)),
       
-      mainPanel(plotOutput(outputId = "metrics.maxn.status.plot", height = "300px"),
-                plotOutput(outputId = "metrics.maxn.location.plot", height = "300px"),
-                plotOutput(outputId = "metrics.maxn.site.plot", height = "300px")
-      )
+      mainPanel(plotOutput(outputId = "metrics.maxn.status.plot", height = "600px"))
     )
   ),
   
@@ -148,8 +145,8 @@ navbarPage(
       
       # Plots
       mainPanel(
-        plotOutput(outputId = "length.histogram", height = "300px"),
-        plotOutput(outputId = "length.boxplot", height = "300px"),
+        plotOutput(outputId = "length.histogram", height = "400px"),
+        plotOutput(outputId = "length.status.plot", height = "400px"),
         #plotOutput(outputId = "length.vs.range", height = "300px"),
         leafletOutput(outputId = "length.spatial.plot", height = "500px")
       )
@@ -163,11 +160,12 @@ navbarPage(
       sidebarPanel(
         # Select CampaignID
         selectInput(inputId = "length.metric.campaignid.selector", label = "CampaignID",
-                    choices = NULL)),
+                    choices = NULL),
+      selectInput("length.metric.selector", "Select metric to plot", choices = c("Target group","Trophic group"), multiple = FALSE)),
       
       # Plots
       mainPanel(
-        plotOutput(outputId = "length.target.status", height = "300px"),
+        plotOutput(outputId = "length.metric.status", height = "600px"),
         plotOutput(outputId = "length.trophic.status", height = "300px"))
     )
   ),
