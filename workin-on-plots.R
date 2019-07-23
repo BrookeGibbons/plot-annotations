@@ -123,6 +123,34 @@ ggplot(length.metric,aes(x = factor(level), y = length, fill=status,notch=FALSE,
   theme_bw() +
   Theme1
 
+stats <- boxplot.stats(length$length)$stats
+
+length.metric<-length%>%
+  left_join(.,life.history)%>%
+  mutate(level=rls.trophic.group)
+
+
+test.group<-length.metric%>%
+  group_by(level)%>%
+  summarise(max=max(boxplot.stats(length)$stats))%>%
+  summarise(max=max(max))
+
+ggplot(length,aes(x = factor(status), y = length,  fill = status,notch=FALSE, outlier.shape = NA),alpha=0.5) + 
+  #scale_fill_manual("",values=c("No-take"="lightgrey","Fished"="lightgrey"))+
+  theme( panel.background = element_blank(),axis.line = element_line(colour = "black"))+
+  stat_boxplot(geom='errorbar')+
+  geom_boxplot(outlier.color = NA, notch=FALSE)+
+  stat_summary(fun.y=mean, geom="point", shape=23, size=4)+ #this is adding the dot for the mean
+  theme_bw()+
+  Theme1+
+  xlab("Location") + ylab("Abundance per stereo-BRUV") +
+  ggtitle("Plot of abundance by Location") +
+  theme_bw() +
+  Theme1+ 
+  coord_cartesian(ylim = c(0,max(stats)*1.05))
+
+
+
 mass<-read_fst("complete.mass.fst")%>%
   glimpse()
 
@@ -153,7 +181,6 @@ total.mass<-mass%>%
   replace_na(list(total.mass=0))
 
 mass.metrics<-bind_rows(over.200,over.300,total.mass)
-
 
 
 

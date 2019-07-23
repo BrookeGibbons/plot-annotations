@@ -864,6 +864,13 @@ output$length.metric.status <- renderPlot({
   
   posn.d <- position_dodge(0.75)
   
+  
+  stats.dat<-length.metric%>%
+    filter(metric==input$length.metric.selector)%>%
+    group_by(level)%>%
+    summarise(max=max(boxplot.stats(length)$stats))%>%
+    summarise(max=max(max))%>%
+    as.data.frame()
 
   ggplot(length.metric,aes(x = level, y = length, fill=status, notch=FALSE, outlier.shape = NA)) + 
     stat_boxplot(geom='errorbar')+
@@ -874,7 +881,8 @@ output$length.metric.status <- renderPlot({
     ggtitle("Plot of length by Status") +
     theme_bw()+
     Theme1+
-    theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))
+    theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+ 
+    coord_cartesian(ylim = c(0,max(stats.dat)*1.15)) #1.45
     
 })
 
@@ -893,6 +901,7 @@ output$mass.status <- renderPlot({
   } else {
     campaign.name <- input$mass.campaignid.selector
     filter(mass.data, campaignid == campaign.name)
+    mass.data<-mass.data
   }
 
 life.history<-life.history()%>%
@@ -967,21 +976,55 @@ total.mass<-mass.data%>%
 }
 
 mass.metrics<-bind_rows(over.200,over.300,total.mass)%>%
-  filter(metric==input$mass.metric.selector)
+  filter(metric==input$mass.metric.selector)%>%
+  mutate(total.mass=total.mass/1000)
 
 posn.d <- position_dodge(0.75)
 
+stats.dat<-mass.metrics%>%
+  filter(metric==input$mass.metric.selector)%>%
+  group_by(level)%>%
+  summarise(max=max(boxplot.stats(total.mass)$stats))%>%
+  summarise(max=max(max))%>%
+  as.data.frame()
 
-ggplot(mass.metrics,aes(x = level, y = total.mass, fill=status, notch=FALSE, outlier.shape = NA)) + 
-  stat_boxplot(geom='errorbar')+
-  geom_boxplot(outlier.color = NA, notch=FALSE)+
-  stat_summary(fun.y=mean, geom="point", shape=23, size=4, position=posn.d)+ #this is adding the dot for the mean
-  theme_bw()+
-  xlab("") + ylab("Mass (g)") +
-  ggtitle("Plot of mass by Status") +
+# ggplot(mass.metrics,aes(x = level, y = total.mass, fill=status, notch=FALSE, outlier.shape = NA)) + 
+#   stat_boxplot(geom='errorbar')+
+#   geom_boxplot(outlier.color = NA, notch=FALSE)+
+#   stat_summary(fun.y=mean, geom="point", shape=23, size=4, position=posn.d)+ #this is adding the dot for the mean
+#   theme_bw()+
+#   xlab("") + ylab("Mass (kg)") +
+#   ggtitle("Plot of mass by Status") +
+#   theme_bw()+
+#   Theme1+
+#   theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+ 
+#   coord_cartesian(ylim = c(0,max(stats.dat)*1.15)) #1.45
+
+posn.d <- position_dodge(0.9)
+
+ggplot(mass.metrics, aes(x = level, y=total.mass, fill = status, group=status)) + 
+  stat_summary(fun.y=mean, geom="bar",colour="black",position="dodge") +
+  stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1,position=posn.d) +
+  geom_hline(aes(yintercept=0))+
+  xlab("")+
+  ylab("Per stereo-BRUV \n(+/- SE)")+
   theme_bw()+
   Theme1+
-  theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))
+  theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
+  ggtitle("Plot of mass by Status")
+
+
+# ggplot(maxn.per.sample, aes(x = level, y=total.abundance, fill=status, group=status)) + 
+#   stat_summary(fun.y=mean, geom="bar",colour="black",position="dodge") +
+#   stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1,position=posn.d) +
+#   geom_hline(aes(yintercept=0))+
+#   xlab("")+
+#   ylab("Per stereo-BRUV \n(+/- SE)")+
+#   theme_bw()+
+#   Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
+#   ggtitle("Plot of abundance by Status")
+
+
 
 })
 
