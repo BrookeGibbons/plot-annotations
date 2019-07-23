@@ -1,7 +1,7 @@
 navbarPage(
   "Plot Annotation data",
   tabPanel(
-    "Upload Data and load Life History",
+    "Upload",
     sidebarLayout(
       sidebarPanel(
         
@@ -30,7 +30,7 @@ navbarPage(
   
   # MaxN summary Tab ----
   tabPanel(
-    "MaxN Summary",
+    "MaxN summary",
     sidebarLayout(
       sidebarPanel(
         #checkboxGroupInput("show_vars", "Select column headers:",
@@ -53,7 +53,7 @@ navbarPage(
   
   # MaxN Plot species Tab ----
   tabPanel(
-    "Species MaxN plots",
+    "MaxN plot species",
     sidebarLayout(
       sidebarPanel(
         
@@ -81,7 +81,7 @@ navbarPage(
   
   # MaxN assemblage plots Tab ----
   tabPanel(
-    "MaxN plots of assemblage",
+    "MaxN plot assemblage",
     sidebarLayout(
       sidebarPanel(
         selectInput(inputId = "assemblage.campaignid.selector", label = "CampaignID",
@@ -98,7 +98,7 @@ navbarPage(
   
   # MaxN metric plots Tab ----
   tabPanel(
-    "MaxN plots of metrics",
+    "MaxN plot metrics",
     sidebarLayout(
       sidebarPanel(
         selectInput(inputId = "metrics.maxn.campaignid.selector", label = "CampaignID",
@@ -112,7 +112,7 @@ navbarPage(
   
   # Length summary Tab ----
   tabPanel(
-    "Length Summary",
+    "Length summary",
     sidebarLayout(
       sidebarPanel(
         selectInput("length.summary.groupby", "Summarise by :",
@@ -128,7 +128,7 @@ navbarPage(
   
   # Length species Tab -----
   tabPanel(
-    "Plot species length",
+    "Length plot species",
     sidebarLayout(
       sidebarPanel(
         # Select CampaignID
@@ -155,7 +155,7 @@ navbarPage(
   
   # Length metrics Tab -----
   tabPanel(
-    "Plot length metrics",
+    "Length plot metrics",
     sidebarLayout(
       sidebarPanel(
         # Select CampaignID
@@ -172,7 +172,7 @@ navbarPage(
   
   # Mass metrics Tab ----
   tabPanel(
-    "Plot mass metrics",
+    "Mass plot metrics",
     sidebarLayout(
       sidebarPanel(
         # Select CampaignID
@@ -209,7 +209,7 @@ navbarPage(
   
   # Example scripts ----
   tabPanel(
-    "Download Scripts",
+    "Download",
     #headerPanel("Simple Shiny Ace!"),
     sidebarPanel(
       downloadButton("downloadData", label = "Download"),
