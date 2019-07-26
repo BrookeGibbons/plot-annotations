@@ -1,26 +1,39 @@
+# 1. Read in data and create campaignID dropdowns for each data frame
+# 2. Create reactive data frames for maxn, length, mass and habitat (filter to campaignid)
+# 3. Update drop downs for Family, Genus and Species for Maxn and Length
+# 4. Create data frames for species plots
+# 5. Summary tables for length and maxn
+# 6. Plots
 
 function(input, output, session) {
-  
-    output$downloadData <- downloadHandler(
-      filename <- function() {
-        paste("example-plotting-script", "R", sep=".")
-      },
-      
-      content <- function(file) {
-        file.copy("example-plotting-script.R", file)
-      },
-      contentType = "R File/R"
+## Dropdown function -----
+  create_dropdown <- function(input_name, choices, label) {
+    if (!is.null(input[[input_name]]) && input[[input_name]] %in% choices) {
+      selected <- input[[input_name]]
+    } else {
+      selected <- choices[1]
+    }
+    
+    selectInput(
+      inputId = input_name,
+      label = label,
+      choices = choices,
+      selected = selected
     )
+  }
   
-  # Populate the CampaignID dropdown when the app loads
-  ## Read in data and create campaign id drop downs----
+######################### DATA #########################
+### 1. Read in data and campaign id drop downs----
+  # MaxN ----
   observe({
     
     req(input$complete.maxn)
-    # read in fst data
+    
+    # Read in fst data
     maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
       as.data.frame()
     
+    # Create list of campaigns
     options <- maxn.data %>%
       dplyr::distinct(campaignid) %>% 
       pull("campaignid")%>%
@@ -28,136 +41,132 @@ function(input, output, session) {
     
     options <- c("All", options)
     
-    updateSelectInput(session, "campaignid.selector", choices = options, selected = "All")
-    updateSelectInput(session, "assemblage.campaignid.selector", choices = options, selected = "All")
-    updateSelectInput(session, "metrics.maxn.campaignid.selector", choices = options, selected = "All")
+    # Update selector
+    updateSelectInput(session, "maxn.campaignid.selector", choices = options, selected = "All")
+    updateSelectInput(session, "maxn.metric.campaignid.selector", choices = options, selected = "All")
 
   })
     
-    
+  # Length ----
   observe({
     req(input$complete.length)
-    # read in fst data
+    
+    # Read in fst data
     length.data<-fst::read_fst(input$complete.length$datapath)%>%
-      dplyr::mutate(key="length")%>%
-      dplyr::mutate(value=length)%>%
       as.data.frame()
     
+    # Create list of campaigns
     options <- length.data %>%
       dplyr::distinct(campaignid) %>% 
       pull("campaignid")%>%
       sort()
     
     options <- c("All", options)
+    
+    # Update selector
     updateSelectInput(session, "length.campaignid.selector", choices = options, selected = "All")
     updateSelectInput(session, "length.metric.campaignid.selector", choices = options, selected = "All")
   })
   
+  # Mass ----
   observe({
       req(input$complete.mass)
+    
+    # Read in fst data
     mass.data<-fst::read_fst(input$complete.mass$datapath)%>%
       dplyr::mutate(key="mass")%>%
       dplyr::mutate(value=mass.g)%>%
       as.data.frame()
     
+    # Create list of campaigns
     options <- mass.data %>%
       dplyr::distinct(campaignid) %>% 
       pull("campaignid")%>%
       sort()
     
+    # Update selector
     options <- c("All", options)
     updateSelectInput(session, "mass.campaignid.selector", choices = options, selected = "All")
   })
   
+  # Habitat ----
   observe({
     req(input$complete.habitat)
+    
+    # Read in fst data
     hab.data<-fst::read_fst(input$complete.habitat$datapath)%>%
       as.data.frame()
     
+    # Create list of campaigns
     options <- hab.data %>%
       dplyr::distinct(campaignid) %>% 
       pull("campaignid")%>%
       sort()
     
+    # Update selector
     options <- c("All", options)
     updateSelectInput(session, "habitat.campaignid.selector", choices = options, selected = "All")
   })
   
-  # Read in life history google sheet
+### Read in life history google sheet ----
 life.history<-  reactive({
+  
     req(input$worksheet.name, input$sheet.name)
     
     life.history <- gs_title(input$worksheet.name)%>%
       gs_read(ws = input$sheet.name)%>%
-      mutate(RLS.trophic.group=tolower(RLS.trophic.group))%>%
-      mutate(Commercial=str_detect(Fishing.type,"C"))%>%
-      mutate(Recreational=str_detect(Fishing.type,"R"))%>%
-      mutate(Bycatch=str_detect(Fishing.type,"B"))%>%
-      dplyr::select(Family,Genus,Species,RLS.trophic.group,Fishing.type,Commercial,Recreational,Bycatch)
+      mutate(trophic.group=ga.capitalise(RLS.trophic.group))%>%
+      dplyr::mutate(target.group=str_replace_all(.$Fishing.type,c("R"="Recreational","C"="Commercial","B/"="","B"="Bycatch","Commercial/Recreational"="Target","Commercial"="Target","Recreational"="Target")))%>%
+      dplyr::mutate(trophic.group=str_replace_all(.$trophic.group,c("NANA"="Missing trophic group","NA"="Missing trophic group")))%>%
+      tidyr::replace_na(list(target.group="Non-target",trophic.group="Missing trophic group"))%>%
+      dplyr::mutate(target.group = factor(target.group, levels = c("Target","Bycatch","Non-target")))%>%
+      dplyr::mutate(target.group = fct_relevel(target.group, "Target","Bycatch","Non-target"))%>%
+      dplyr::select(Family,Genus,Species,trophic.group,target.group)%>%
+      ga.clean.names()
     
     life.history
     
   })
   
-  # Create a dropdown function -----
-  create_dropdown <- function(input_name, choices, label) {
-    if (!is.null(input[[input_name]]) && input[[input_name]] %in% choices) {
-      selected <- input[[input_name]] 
-    } else {
-      selected <- choices[1]
-    }
+### 2. Reactive data frames ----
+  # MaxN ----
+  maxn_data <- reactive({
+    req(input$maxn.campaignid.selector)
     
-    selectInput(
-      inputId = input_name, 
-      label = label,
-      choices = choices,
-      selected = selected
-    )
-  }
-  
-  # Create MaxN reactive data frame ----
-  campaignid_data <- reactive({
-    req(input$campaignid.selector)
     maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
-      dplyr::mutate(key="maxn")%>%
       as.data.frame()
     
-    if (input$campaignid.selector == "All") {
+    if (input$maxn.campaignid.selector == "All") {
       maxn.data
       
     } else {
-      campaign.name <- input$campaignid.selector
+      campaign.name <- input$maxn.campaignid.selector
       filter(maxn.data, campaignid == campaign.name)
     }
   })
   
-# Create MaxN assemblage reactive data frame ----
-assemblage_maxn_data <- reactive({
-  req(input$assemblage.campaignid.selector)
+  # MaxN metric ----
+ maxn_metric_data <- reactive({
+  req(input$maxn.metric.campaignid.selector)
 
   maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
     as.data.frame()
   
-  if (input$assemblage.campaignid.selector == "All") {
+  if (input$maxn.metric.campaignid.selector == "All") {
     maxn.data
 
   } else {
-    campaign.name <- input$assemblage.campaignid.selector
+    campaign.name <- input$maxn.metric.campaignid.selector
     filter(maxn.data, campaignid == campaign.name)
   }
-})
-
-assemblage_metric_data <- reactive({
-maxn <- assemblage_maxn_data()%>%
-  as.data.frame()
-
-total.abundance<-maxn%>%
+  
+total.abundance<-maxn.data%>%
   dplyr::group_by(campaignid,sample,status,location,site,latitude,longitude)%>%
   dplyr::summarise(total.abundance=sum(maxn))%>%
   ungroup()%>%
   mutate(metric="Total abundance")
 
-species.richness<-maxn%>%
+species.richness<-maxn.data%>%
   filter(maxn>0)%>%
   dplyr::group_by(campaignid,sample,status,location,site,latitude,longitude)%>%
   dplyr::summarise(total.abundance=length(unique(scientific)))%>%
@@ -169,70 +178,87 @@ assemblage
 
 })
 
-# Create MaxN metric reactive data frame ----
-metric_data <- reactive({
-  req(input$metrics.maxn.campaignid.selector)
+# metric_data <- reactive({
+#   req(input$metrics.campaignid.selector)
+#   
+#   maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
+#     as.data.frame()
+#   
+#   if (input$metrics.campaignid.selector == "All") {
+#     maxn.data
+#     
+#   } else {
+#     campaign.name <- input$metrics.campaignid.selector
+#     filter(maxn.data, campaignid == campaign.name)
+#   }
+# })
+# 
+# maxn_metric_data <- reactive({
+#   maxn <- metric_data()%>%
+#     as.data.frame()
+#   
+#   if (input$metrics.campaignid.selector == "All") {
+#     maxn<-maxn
+#     
+#   } else {
+#     campaign.name <- input$metrics.campaignid.selector
+#     filter(maxn, campaignid == campaign.name)
+#   }
+#   
+#   life.history<-life.history()
+#   
+#   trophic<-maxn%>%
+#     dplyr::rename(Family=family,Genus=genus,Species=species)%>%
+#     left_join(.,life.history)%>%
+#     dplyr::rename(trophic.group=RLS.trophic.group)%>%
+#     dplyr::group_by(campaignid,sample,status,location,site,latitude,longitude,trophic.group)%>%
+#     dplyr::summarise(total.abundance=sum(maxn))%>%
+#     ungroup()%>%
+#     replace_na(list(trophic.group="missing trophic group"))%>%
+#     dplyr::mutate(metric="Trophic group")%>%
+#     dplyr::rename(level=trophic.group)%>%
+#     glimpse()
+#   
+#   target<-maxn%>%
+#     dplyr::rename(Family=family,Genus=genus,Species=species)%>%
+#     left_join(life.history)%>%
+#     dplyr::mutate(target.group=str_replace_all(.$Fishing.type,c("R"="Recreational","C"="Commercial","B/"="","B"="Bycatch")))%>%
+#     tidyr::replace_na(list(target.group="Non-target"))%>%
+#     dplyr::mutate(target.group=str_replace_all(.$target.group,c("Commercial/Recreational"="Target","Commercial"="Target","Recreational"="Target")))%>%
+#     mutate(target.group = factor(target.group, levels = c("Target","Bycatch","Non-target")))%>%
+#     mutate(target.group = fct_relevel(target.group, "Target","Bycatch","Non-target")) %>%
+#     dplyr::group_by(campaignid,sample,status,location,site,latitude,longitude,target.group)%>%
+#     dplyr::summarise(total.abundance=sum(maxn))%>%
+#     ungroup()%>%
+#     dplyr::mutate(metric="Target group")%>%
+#     dplyr::rename(level=target.group)%>%
+#     glimpse()
+#   
+#   metric.dat <- bind_rows(trophic, target)
+#   metric.dat
+#   
+# })
+
+
+  # Length ----
+length_data <- reactive({
+  req(input$length.campaignid.selector)
   
-  maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
+  length.data <- fst::read_fst(input$complete.length$datapath)%>%
     as.data.frame()
   
-  if (input$metrics.maxn.campaignid.selector == "All") {
-    maxn.data
+  if (input$length.campaignid.selector == "All") {
+    length.data
     
   } else {
-    campaign.name <- input$metrics.maxn.campaignid.selector
-    filter(maxn.data, campaignid == campaign.name)
+    campaign.name <- input$length.campaignid.selector
+    filter(length.data, campaignid == campaign.name)
   }
 })
 
-maxn_metric_data <- reactive({
-  maxn <- metric_data()%>%
-    as.data.frame()
+  # Length metric ----
+metric_length_data <- reactive({
   
-  if (input$metrics.maxn.campaignid.selector == "All") {
-    maxn<-maxn
-    
-  } else {
-    campaign.name <- input$metrics.maxn.campaignid.selector
-    filter(maxn, campaignid == campaign.name)
-  }
-  
-  life.history<-life.history()
-  
-  trophic<-maxn%>%
-    dplyr::rename(Family=family,Genus=genus,Species=species)%>%
-    left_join(.,life.history)%>%
-    dplyr::rename(trophic.group=RLS.trophic.group)%>%
-    dplyr::group_by(campaignid,sample,status,location,site,latitude,longitude,trophic.group)%>%
-    dplyr::summarise(total.abundance=sum(maxn))%>%
-    ungroup()%>%
-    replace_na(list(trophic.group="missing trophic group"))%>%
-    dplyr::mutate(metric="Trophic group")%>%
-    dplyr::rename(level=trophic.group)%>%
-    glimpse()
-  
-  target<-maxn%>%
-    dplyr::rename(Family=family,Genus=genus,Species=species)%>%
-    left_join(life.history)%>%
-    dplyr::mutate(target.group=str_replace_all(.$Fishing.type,c("R"="Recreational","C"="Commercial","B/"="","B"="Bycatch")))%>%
-    tidyr::replace_na(list(target.group="Non-target"))%>%
-    dplyr::mutate(target.group=str_replace_all(.$target.group,c("Commercial/Recreational"="Target","Commercial"="Target","Recreational"="Target")))%>%
-    mutate(target.group = factor(target.group, levels = c("Target","Bycatch","Non-target")))%>%
-    mutate(target.group = fct_relevel(target.group, "Target","Bycatch","Non-target")) %>%
-    dplyr::group_by(campaignid,sample,status,location,site,latitude,longitude,target.group)%>%
-    dplyr::summarise(total.abundance=sum(maxn))%>%
-    ungroup()%>%
-    dplyr::mutate(metric="Target group")%>%
-    dplyr::rename(level=target.group)%>%
-    glimpse()
-  
-  metric.dat <- bind_rows(trophic, target)
-  metric.dat
-  
-})
-
-# Create Length metric reactive data frame ----
-metric_length <- reactive({
   req(input$length.metric.campaignid.selector)
   
   length.data <- fst::read_fst(input$complete.length$datapath)%>%
@@ -246,7 +272,6 @@ metric_length <- reactive({
     filter(length.data, campaignid == campaign.name)
   }
 })
-
 
 metric_length_data <- reactive({
   length <- metric_length()%>%
@@ -280,26 +305,10 @@ metric_length_data <- reactive({
   
 })
 
-
-  # Create Length reactive data frame ----
-  length_campaignid_data <- reactive({
-    req(input$length.campaignid.selector)
-    length.data <- fst::read_fst(input$complete.length$datapath)%>%
-      dplyr::mutate(key="length")%>%
-      as.data.frame()
-    
-    if (input$length.campaignid.selector == "All") {
-      length.data
-      
-    } else {
-      campaign.name <- input$length.campaignid.selector
-      filter(length.data, campaignid == campaign.name)
-    }
-  })
-  
-  # Create Mass reactive data frame ----
-  mass_campaignid_data <- reactive({
+  # Mass ----
+  mass_data <- reactive({
     req(input$mass.campaignid.selector)
+    
     mass.data <- fst::read_fst(input$complete.mass$datapath)%>%
       as.data.frame()
     
@@ -312,8 +321,8 @@ metric_length_data <- reactive({
     }
   })
   
-  # Create Habitat reactive data frame ----
-  hab_campaignid_data <- reactive({
+  # Habitat ----
+  habitat_data <- reactive({
     req(input$habitat.campaignid.selector)
     hab.data <- fst::read_fst(input$complete.habitat$datapath)%>%
       as.data.frame()
@@ -327,46 +336,45 @@ metric_length_data <- reactive({
     }
   })
   
-  # Create family drop down for MaxN ----
-  output$family.selector <- renderUI({
+### 3. Drop downs for species plots ----
+  # Family for MaxN ----
+  output$maxn.family.selector <- renderUI({
+      
+      if (input$maxn.campaignid.selector == "All") {
+        df<-maxn_data()
+        
+        options <- df %>%
+          distinct(family) %>%
+          pull("family")%>%
+          sort()
+        
+        create_dropdown("maxn.family.selector", options, "Family:")
+        
+      } else {
+        
+        df<-maxn_data()
+        
+        family.genus.species.to.keep<-df%>%
+          filter(maxn>0)%>%
+          filter(campaignid == input$maxn.campaignid.selector)%>%
+          distinct(family,genus,species)
+        
+        options <- df %>%
+          filter(campaignid == input$maxn.campaignid.selector) %>%
+          semi_join(family.genus.species.to.keep)%>%
+          distinct(family) %>%
+          pull("family")%>%
+          sort()
+        
+        create_dropdown("maxn.family.selector", options, "Family:")
+      }
+    })
 
-    if (input$campaignid.selector == "All") {
-      df<-campaignid_data()
-      
-      options <- df %>%
-        #filter(key == input$key.selector) %>%
-        distinct(family) %>%
-        pull("family")%>%
-        sort()
-      
-      create_dropdown("family.selector", options, "Family:")
-      
-    } else {
-      
-      df<-campaignid_data()
-      
-      family.genus.species.to.keep<-df%>%
-        filter(maxn>0)%>%
-        filter(campaignid == input$campaignid.selector)%>%
-        distinct(family,genus,species)
-      
-      options <- df %>%
-        #filter(key == input$key.selector) %>%
-        filter(campaignid == input$campaignid.selector) %>%
-        semi_join(family.genus.species.to.keep)%>%
-        distinct(family) %>%
-        pull("family")%>%
-        sort()
-      
-      create_dropdown("family.selector", options, "Family:")
-    }
-  })
-
-  # Create family drop down for Length ----
+  # Family for Length ----
   output$length.family.selector <- renderUI({
     
     if (input$length.campaignid.selector == "All") {
-      df<-length_campaignid_data()
+      df<-length_data()
       
       options <- df %>%
         distinct(family) %>%
@@ -377,7 +385,7 @@ metric_length_data <- reactive({
       
     } else {
       
-      df<-length_campaignid_data()
+      df<-length_data()
       
       family.genus.species.to.keep<-df%>%
         filter(number>0)%>%
@@ -394,85 +402,51 @@ metric_length_data <- reactive({
       create_dropdown("length.family.selector", options, "Family:")
     }
   })
-  
-  # Create family drop down for Mass ----
-  output$mass.family.selector <- renderUI({
-    
-    if (input$mass.campaignid.selector == "All") {
-      df<-mass_campaignid_data()
-      
-      options <- df %>%
-        distinct(family) %>%
-        pull("family")%>%
-        sort()
-      
-      create_dropdown("mass.family.selector", options, "Family:")
-      
-    } else {
-      
-      df<-mass_campaignid_data()
-      
-      family.genus.species.to.keep<-df%>%
-        filter(mass.g>0)%>%
-        filter(campaignid == input$mass.campaignid.selector)%>%
-        distinct(family,genus,species)
-      
-      options <- df %>%
-        filter(campaignid == input$mass.campaignid.selector) %>%
-        semi_join(family.genus.species.to.keep)%>%
-        distinct(family) %>%
-        pull("family")%>%
-        sort()
-      
-      create_dropdown("mass.family.selector", options, "Family:")
-    }
-  })
 
-  # Create genus drop down for MaxN ----
-  output$genus.selector <- renderUI({
-    req(input$family.selector)
-    
-    if (input$campaignid.selector == "All") {
-      df<-campaignid_data()
+  # Genus for MaxN ----
+  output$maxn.genus.selector <- renderUI({
+      req(input$maxn.family.selector)
       
-      options <- df %>%
-        filter(#key == input$key.selector,
-               family == input$family.selector) %>%
-        distinct(genus) %>%
-        pull("genus")%>%
-        sort()
+      if (input$maxn.campaignid.selector == "All") {
+        df<-maxn_data()
+        
+        options <- df %>%
+          filter(#key == input$key.selector,
+            family == input$maxn.family.selector) %>%
+          distinct(genus) %>%
+          pull("genus")%>%
+          sort()
+        create_dropdown("maxn.genus.selector", options, "Genus:")
+        
+        
+      } else {
+        
+        df<-maxn_data()
+        
+        family.genus.species.to.keep<-df%>%
+          filter(maxn>0)%>%
+          filter(campaignid == input$maxn.campaignid.selector)%>%
+          distinct(family,genus,species)
+        
+        options <- df %>%
+          #filter(key == input$key.selector) %>%
+          filter(campaignid == input$maxn.campaignid.selector) %>%
+          filter(family == input$maxn.family.selector) %>%
+          semi_join(family.genus.species.to.keep)%>%
+          distinct(genus) %>%
+          pull("genus")%>%
+          sort()
+        
         create_dropdown("genus.selector", options, "Genus:")
-      
-      
-    } else {
-      
-      df<-campaignid_data()
-      
-      family.genus.species.to.keep<-df%>%
-        filter(maxn>0)%>%
-        filter(campaignid == input$campaignid.selector)%>%
-        distinct(family,genus,species)
-      
-      options <- df %>%
-        #filter(key == input$key.selector) %>%
-        filter(campaignid == input$campaignid.selector) %>%
-        filter(family == input$family.selector) %>%
-        semi_join(family.genus.species.to.keep)%>%
-        distinct(genus) %>%
-        pull("genus")%>%
-        sort()
-      
-      create_dropdown("genus.selector", options, "Genus:")
-    }
-  })
+      }
+    })
   
-  
-  # Create genus drop down for Length ----
+  # Genus for Length ----
   output$length.genus.selector <- renderUI({
     req(input$length.family.selector)
     
     if (input$length.campaignid.selector == "All") {
-      df<-length_campaignid_data()
+      df<-length_data()
       
       options <- df %>%
         filter(family == input$length.family.selector) %>%
@@ -484,7 +458,7 @@ metric_length_data <- reactive({
       
     } else {
       
-      df<-length_campaignid_data()
+      df<-length_data()
       
       family.genus.species.to.keep<-df%>%
         filter(number>0)%>%
@@ -503,106 +477,67 @@ metric_length_data <- reactive({
     }
   })
   
-  
-  # Create genus drop down for Mass ----
-  output$mass.genus.selector <- renderUI({
-    req(input$mass.family.selector)
+  # Species for MaxN ----
+output$maxn.species.selector <- renderUI({
+    req(input$maxn.family.selector, input$maxn.genus.selector)
     
-    if (input$mass.campaignid.selector == "All") {
-      df<-mass_campaignid_data()
-      
-      options <- df %>%
-        filter(family == input$mass.family.selector) %>%
-        distinct(genus) %>%
-        pull("genus")%>%
-        sort()
-      create_dropdown("mass.genus.selector", options, "Genus:")
-      
-      
-    } else {
-      
-      df<-mass_campaignid_data()
-      
-      family.genus.species.to.keep<-df%>%
-        filter(mass.g>0)%>%
-        filter(campaignid == input$mass.campaignid.selector)%>%
-        distinct(family,genus,species)
-      
-      options <- df %>%
-        filter(campaignid == input$mass.campaignid.selector) %>%
-        filter(family == input$mass.family.selector) %>%
-        semi_join(family.genus.species.to.keep)%>%
-        distinct(genus) %>%
-        pull("genus")%>%
-        sort()
-      
-      create_dropdown("mass.genus.selector", options, "Genus:")
-    }
-  })
-
-  # Create species drop down for MaxN ----
-  output$species.selector <- renderUI({
-    req(input$family.selector, input$genus.selector)
-    
-    if (input$campaignid.selector == "All") {
-      df<-campaignid_data()
+    if (input$maxn.campaignid.selector == "All") {
+      df<-maxn_data()
       
       options <- df %>%
         filter(
           #key == input$key.selector,
-          family == input$family.selector,
-          genus == input$genus.selector
+          family == input$maxn.family.selector,
+          genus == input$maxn.genus.selector
         ) %>%
         dplyr::select("species") %>%
         distinct() %>%
         pull("species")%>%
         sort()
-      create_dropdown("species.selector", options, "Species:")
+      create_dropdown("maxn.species.selector", options, "Species:")
       
       
     } else {
       
-      df<-campaignid_data()
+      df<-maxn_data()
       
       family.genus.species.to.keep<-df%>%
         filter(maxn>0)%>%
-        filter(campaignid == input$campaignid.selector)%>%
+        filter(campaignid == input$maxn.campaignid.selector)%>%
         distinct(family,genus,species)
       
       options <- df %>%
-        filter(campaignid == input$campaignid.selector) %>%
-        filter(family == input$family.selector,
-          genus == input$genus.selector) %>%
+        filter(campaignid == input$maxn.campaignid.selector) %>%
+        filter(family == input$maxn.family.selector,
+               genus == input$maxn.genus.selector) %>%
         semi_join(family.genus.species.to.keep)%>%
         dplyr::select("species") %>%
         distinct() %>%
         pull("species")%>%
         sort()
-      create_dropdown("species.selector", options, "Species:")
+      create_dropdown("maxn.species.selector", options, "Species:")
     }
   })
   
-  
-  # Create species drop down for Length ----
+  # Species for Length ----
   output$length.species.selector <- renderUI({
     req(input$length.family.selector, input$length.genus.selector)
     
     if (input$length.campaignid.selector == "All") {
-      df<-length_campaignid_data()
+      df<-length_data()
       
       options <- df %>%
-        filter(family == input$length.family.selector,
-          genus == input$length.genus.selector) %>%
+        filter(family == input$length.family.selector,genus == input$length.genus.selector) %>%
         dplyr::select("species") %>%
         distinct() %>%
         pull("species")%>%
         sort()
-      create_dropdown("length.species.selector", options, "Species:")
       
+      create_dropdown("length.species.selector", options, "Species:")
       
     } else {
       
-      df<-length_campaignid_data()
+      df<-length_data()
       
       family.genus.species.to.keep<-df%>%
         filter(number>0)%>%
@@ -611,120 +546,201 @@ metric_length_data <- reactive({
       
       options <- df %>%
         filter(campaignid == input$length.campaignid.selector) %>%
-        filter(family == input$length.family.selector,
-               genus == input$length.genus.selector) %>%
+        filter(family == input$length.family.selector,genus == input$length.genus.selector) %>%
         semi_join(family.genus.species.to.keep)%>%
         dplyr::select("species") %>%
         distinct() %>%
         pull("species")%>%
         sort()
+      
       create_dropdown("length.species.selector", options, "Species:")
     }
   })
   
+### 4. Data frames for species plots ----
+  # Maxn  ----
+ maxn_species_data <- reactive({
+   req(input$maxn.family.selector, input$maxn.genus.selector, input$maxn.species.selector)
+   maxn_data() %>%
+     filter(
+       family == input$maxn.family.selector,
+       genus == input$maxn.genus.selector,
+       species == input$maxn.species.selector
+     )
+ })
   
-  # Create species drop down for Mass ----
-  output$mass.species.selector <- renderUI({
-    req(input$mass.family.selector, input$mass.genus.selector)
-    
-    if (input$mass.campaignid.selector == "All") {
-      df<-mass_campaignid_data()
-      
-      options <- df %>%
-        filter(
-          family == input$mass.family.selector,
-          genus == input$mass.genus.selector) %>%
-        dplyr::select("species") %>%
-        distinct() %>%
-        pull("species")%>%
-        sort()
-      create_dropdown("mass.species.selector", options, "Species:")
-      
-      
-    } else {
-      
-      df<-mass_campaignid_data()
-      
-      family.genus.species.to.keep<-df%>%
-        filter(mass.g>0)%>%
-        filter(campaignid == input$mass.campaignid.selector)%>%
-        distinct(family,genus,species)
-      
-      options <- df %>%
-        filter(campaignid == input$mass.campaignid.selector) %>%
-        filter(family == input$mass.family.selector,
-               genus == input$mass.genus.selector) %>%
-        semi_join(family.genus.species.to.keep)%>%
-        dplyr::select("species") %>%
-        distinct() %>%
-        pull("species")%>%
-        sort()
-      create_dropdown("mass.species.selector", options, "Species:")
-    }
-  })
-  
-# Maxn data ----
-  trends_data <- reactive({
-    req(input$family.selector, input$genus.selector, input$species.selector)
-    campaignid_data() %>%
-      filter(
-        family == input$family.selector,
-        genus == input$genus.selector,
-        species == input$species.selector
-      )
-  })
-  
-  # Length data ----
-  length_trends_data <- reactive({
+  # Length ----
+  length_species_data <- reactive({
     req(input$length.family.selector, input$length.genus.selector, input$length.species.selector)
-    length_campaignid_data() %>%
+    
+    length_data() %>%
       filter(
         family == input$length.family.selector,
         genus == input$length.genus.selector,
         species == input$length.species.selector
       )
   })
-  
-  # Mass data ----
-  mass_trends_data <- reactive({
-    req(input$mass.family.selector, input$mass.genus.selector, input$mass.species.selector)
-    mass_campaignid_data() %>%
-      filter(family == input$mass.family.selector,
-        genus == input$mass.genus.selector,
-        species == input$mass.species.selector )
-  })
-  
-  
-  # Habitat data ----
-  habitat_data <- reactive({
-    hab_campaignid_data()
-  })
 
-  # Create scatterplot object the plotOutput function is expecting
+# Habitat data ---- # can just use (habitat_data())
 
-  # Maxn Status ----
-  output$status.plot <- renderPlot({
-    
-    maxn.per.sample<-trends_data()%>%
-      group_by(campaignid,sample,status)%>%
-      summarise(maxn=sum(maxn))
-    
-    ggplot(maxn.per.sample, aes(x = status,y=maxn, fill = status)) + 
-      stat_summary(fun.y=mean, geom="bar",colour="black") +
-      stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1) +
-      geom_hline(aes(yintercept=0))+
-      xlab("")+
-      ylab("Average abundance per stereo-BRUV \n(+/- SE)")+
-      theme_bw()+
-      Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
-      ggtitle("Plot of abundance by Status")
-  })
+
+### 5. Summarys ----
+  # Maxn ----
+maxn.summary.data <- reactive({
+  life.history<-life.history()
   
-  # maxn Location ----
-  
-  output$location.plot <- renderPlot({
+  if (input$maxn.summary.groupby=="Species") {
     
-    maxn.per.sample<-trends_data()%>%
+    maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
+      as.data.frame()%>%
+      filter(maxn>0)%>%
+      dplyr::group_by(family,genus,species)%>%
+      dplyr::summarise(total.abundance=sum(maxn),number.of.samples=length(unique(id)))%>%
+      ungroup()%>%
+      arrange(-total.abundance)%>%
+      left_join(.,life.history)%>%
+      tidyr::replace_na(list(target.group="Non-target",trophic.group="Missing trophic group"))%>%
+      dplyr::rename(Family=family,Genus=genus,Species=species,'Total abundance'=total.abundance,'Number of samples'=number.of.samples,'Trophic group'=trophic.group,'Target group'=target.group)
+  }
+  
+  if (input$maxn.summary.groupby=="Target group") {
+    maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
+      as.data.frame()%>%
+      filter(maxn>0)%>%
+      left_join(.,life.history)%>%
+      tidyr::replace_na(list(target.group="Non-target"))%>%
+      dplyr::group_by(target.group)%>%
+      dplyr::summarise(total.abundance=sum(maxn),number.of.samples=length(unique(id)))%>%
+      ungroup()%>%
+      arrange(-total.abundance)%>%
+      dplyr::rename('Total abundance'=total.abundance,'Number of samples'=number.of.samples,'Target group'=target.group)%>%
+      glimpse()
+  }
+  
+  if (input$maxn.summary.groupby=="Trophic group") {
+    maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
+      as.data.frame()%>%
+      filter(maxn>0)%>%
+      left_join(.,life.history)%>%
+      tidyr::replace_na(list(trophic.group="Missing trophic group"))%>%
+      dplyr::group_by(trophic.group)%>%
+      dplyr::summarise(total.abundance=sum(maxn),number.of.samples=length(unique(id)))%>%
+      ungroup()%>%
+      arrange(-total.abundance)%>%
+      dplyr::rename('Total abundance'=total.abundance,'Number of samples'=number.of.samples,'Trophic group'=trophic.group)
+  }
+  
+  maxn.data
+})
+
+output$maxn.summary <- DT::renderDataTable(
+  DT::datatable(maxn.summary.data(), options = list( # [, input$show_vars, drop = FALSE]
+    lengthMenu = list(c(10, 25, 50, -1), c('10', '25','50', 'All')),
+    pageLength = 15, rownames= FALSE
+  )
+  )
+)
+
+maxn.summary <- reactive({
+  maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
+    as.data.frame()
+})
+
+output$overall.abundance <- renderText({ 
+  paste("Overall total abundance:",sum(maxn.summary.data()$'Total abundance'))
+})
+
+output$species.richness <- renderText({ 
+  paste("Overall species richness:",length(unique(maxn.summary()$scientific)))
+})
+
+
+  # Length ----
+length.summary.data <- reactive({
+  life.history<-life.history()
+  
+  if (input$length.summary.groupby=="Species") {
+    length.data <- fst::read_fst(input$complete.length$datapath)%>%
+      as.data.frame()%>%
+      filter(length>0)%>%
+      dplyr::group_by(family,genus,species)%>%
+      dplyr::summarise(Total.measured=sum(number),Number.of.samples=length(unique(id)),Mean.length=mean(length),Min.length=min(length),Max.length=max(length))%>%
+      mutate(Mean.length=round(Mean.length, digits=2))%>%
+      mutate(Min.length=round(Min.length, digits=2))%>%
+      mutate(Max.length=round(Max.length, digits=2))%>%
+      ungroup()%>%
+      arrange(-Total.measured)%>%
+      left_join(.,life.history)%>%
+      dplyr::rename(Family=family,Genus=genus,Species=species,'Trophic group'=trophic.group,"Target group"=target.group,'Total measured'=Total.measured,'Number of samples'=Number.of.samples,'Mean length'=Mean.length,'Min length'=Min.length,'Max length'=Max.length)
+    
+  }
+  
+  if (input$length.summary.groupby=="Target group") {
+    length.data <- fst::read_fst(input$complete.length$datapath)%>%
+      as.data.frame()%>%
+      filter(length>0)%>%
+      left_join(life.history)%>%
+      replace_na(list(target.group="Non-target"))%>%
+      dplyr::group_by(target.group)%>%
+      dplyr::summarise(Total.measured=sum(number),Number.of.samples=length(unique(id)),Mean.length=mean(length),Min.length=min(length),Max.length=max(length))%>%
+      mutate(Mean.length=round(Mean.length, digits=2))%>%
+      mutate(Min.length=round(Min.length, digits=2))%>%
+      mutate(Max.length=round(Max.length, digits=2))%>%
+      ungroup()%>%
+      arrange(-Total.measured)%>%
+      dplyr::rename('Total measured'=Total.measured,'Number of samples'=Number.of.samples,'Mean length'=Mean.length,'Min length'=Min.length,'Max length'=Max.length,'Target group'=target.group)
+  }
+  
+  if (input$length.summary.groupby=="Trophic group") {
+    length.data <- fst::read_fst(input$complete.length$datapath)%>%
+      as.data.frame()%>%
+      filter(length>0)%>%
+      left_join(life.history)%>%
+      replace_na(list(trophic.group="Missing trophic group"))%>%
+      dplyr::group_by(trophic.group)%>%
+      dplyr::summarise(Total.measured=sum(number),Number.of.samples=length(unique(id)),Mean.length=mean(length),Min.length=min(length),Max.length=max(length))%>%
+      mutate(Mean.length=round(Mean.length, digits=2))%>%
+      mutate(Min.length=round(Min.length, digits=2))%>%
+      mutate(Max.length=round(Max.length, digits=2))%>%
+      ungroup()%>%
+      arrange(-Total.measured)%>%
+      dplyr::rename('Total measured'=Total.measured,'Number of samples'=Number.of.samples,'Mean length'=Mean.length,'Min length'=Min.length,'Max length'=Max.length, 'Trophic group'=trophic.group)
+    
+  }
+  length.data 
+})
+
+output$length.summary <- DT::renderDataTable(
+  DT::datatable(length.summary.data(), options = list( #
+    lengthMenu = list(c(10, 25, 50, -1), c('10', '25','50', 'All')),
+    pageLength = 15, rownames= FALSE,digits=2)
+  )
+)
+
+######################### PLOTS #########################
+# Maxn species plot Status ----
+output$maxn.status.plot <- renderPlot({
+  
+  maxn.per.sample<-maxn_species_data()%>%
+    group_by(campaignid,sample,status)%>%
+    summarise(maxn=sum(maxn))
+  
+  ggplot(maxn.per.sample, aes(x = status,y=maxn, fill = status)) + 
+    stat_summary(fun.y=mean, geom="bar",colour="black") +
+    stat_summary(fun.ymin = se.min, fun.ymax = se.max, geom = "errorbar", width = 0.1) +
+    geom_hline(aes(yintercept=0))+
+    xlab("")+
+    ylab("Average abundance per stereo-BRUV \n(+/- SE)")+
+    theme_bw()+
+    Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
+    ggtitle("Plot of abundance by Status")
+})
+
+# Maxn species plot Location ----
+  
+  output$maxn.location.plot <- renderPlot({
+    
+    maxn.per.sample<-maxn_species_data()%>%
       group_by(campaignid,sample,location)%>%
       summarise(maxn=sum(maxn))
     
@@ -735,14 +751,16 @@ metric_length_data <- reactive({
       xlab("")+
       ylab("Average abundance per stereo-BRUV \n(+/- SE)")+
       theme_bw()+
-      Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
+      Theme1+
+      theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
       ggtitle("Plot of abundance by Location")
     
   })
   
-  # Maxn Site ----
-  output$site.plot <- renderPlot({
-    maxn.per.sample<-trends_data()%>%
+# Maxn species plot Site ----
+  output$maxn.site.plot <- renderPlot({
+    
+    maxn.per.sample<-maxn_species_data()%>%
       group_by(campaignid,sample,site)%>%
       summarise(maxn=sum(maxn))
     
@@ -755,32 +773,15 @@ metric_length_data <- reactive({
       theme_bw()+
       Theme1+theme(panel.grid = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black"))+
       ggtitle("Plot of abundance by Site")
+    
   })
-  
-
-# # make drop down for metrics
-# observe({
-#   req(input$complete.maxn)
-#   # read in fst data
-#   maxn.data <- assemblage_metric_data()%>%
-#     as.data.frame()
-#   
-#   options <- maxn.data %>%
-#     dplyr::distinct(metric) %>% 
-#     pull("metric")%>%
-#     sort()
-#   
-#   updateSelectInput(session, "assemblage.maxn.metric.selector", choices = options, selected = "Total abundance")
-#   
-# })
-
-
-# Maxn assemblage Status ----
-output$assemblage.maxn.status.plot <- renderPlot({
+ 
+# Maxn metric plot Status ----
+output$metrics.maxn.status.plot <- renderPlot({
   
   maxn.per.sample<-assemblage_metric_data()%>%
     as.data.frame()%>%
-    filter(metric == input$assemblage.maxn.metric.selector)%>%
+    filter(metric == input$metrics.selector)%>%
     glimpse()
   
   ggplot(maxn.per.sample, aes(x = status,y=total.abundance, fill = status)) + 
@@ -794,13 +795,13 @@ output$assemblage.maxn.status.plot <- renderPlot({
     ggtitle("Plot of abundance by Status")
 })
 
-# maxn Location ----
+# Maxn metric plot Location ----
 
 output$assemblage.maxn.location.plot <- renderPlot({
   
   maxn.per.sample<-assemblage_metric_data()%>%
     as.data.frame()%>%
-    filter(metric == input$assemblage.maxn.metric.selector)%>%
+    filter(metric == input$metrics.selector)%>%
     glimpse()
   
   ggplot(maxn.per.sample, aes(x = location,y=total.abundance)) + 
@@ -815,11 +816,11 @@ output$assemblage.maxn.location.plot <- renderPlot({
   
 })
 
-# Maxn Site ----
+# Maxn metric plot Site ----
 output$assemblage.maxn.site.plot <- renderPlot({
   maxn.per.sample<-assemblage_metric_data()%>%
     as.data.frame()%>%
-    filter(metric == input$assemblage.maxn.metric.selector)%>%
+    filter(metric == input$metrics.selector)%>%
     glimpse()
   
   ggplot(maxn.per.sample, aes(x = site,y=total.abundance)) + 
@@ -833,7 +834,7 @@ output$assemblage.maxn.site.plot <- renderPlot({
     ggtitle("Plot of abundance by Site")
 })
 
-# Maxn metric Status ----
+# Maxn metric plot Status ----
 output$metrics.maxn.status.plot <- renderPlot({
   
   maxn.per.sample<-maxn_metric_data()%>%
@@ -854,7 +855,8 @@ output$metrics.maxn.status.plot <- renderPlot({
       ggtitle("Plot of abundance by Status")
 })
 
-# length metric Status ----
+
+# Length metric plot Status ----
 output$length.metric.status <- renderPlot({
   
   length.metric<-metric_length_data()%>%
@@ -887,7 +889,8 @@ output$length.metric.status <- renderPlot({
 })
 
 
-# mass metric Status ----
+
+# Mass metric plot Status ----
 output$mass.status <- renderPlot({
 
   req(input$mass.campaignid.selector)
@@ -1003,55 +1006,17 @@ ggplot(mass.metrics, aes(x = level, y=total.mass, fill = status, group=status)) 
 })
 
 
-  # Length histogram ----
-  output$length.histogram <- renderPlot({
-    ggplot(length_trends_data(),aes(x = length,colour = status,fill=status))+
-      geom_histogram(alpha=0.5, position="identity",binwidth=input$length.binwidth)+
-      #geom_density(alpha=0.6)+
-      xlab("Length (mm)") + ylab("Count") +
-      theme_bw() +
-      Theme1
-  })
-  
-  # Mass histogram -----
-  output$mass.histogram <- renderPlot({
-    ggplot(mass_trends_data(),aes(x = mass.g,colour = status,fill=status))+
-      geom_histogram(alpha=0.5, position="identity",binwidth=input$mass.binwidth)+
-      #geom_density(alpha=0.6)+
-      xlab("Mass (g)") + ylab("Count") +
-      theme_bw() +
-      Theme1
-  })
-  
-  # Length vs. Range
-  output$length.vs.range <- renderPlot({
-    ggplot(length_trends_data(), aes(x = range,y = length)) +
-    geom_point()+
-    geom_smooth()+
-      xlab("Range (mm)") + ylab("Length (mm)") +
-      theme_bw() +
-      Theme1
-  })
-  
-  # Biomass vs. Length
-  output$length.vs.mass <- renderPlot({
-    ggplot(mass_trends_data(), aes(x = length,y = mass.g)) +
-      geom_point()+
-      geom_smooth()+
-      xlab("Length (mm)") + ylab("Mass (g)") +
-      theme_bw() +
-      Theme1
-  })
 
-  # Maxn Spatial plot ----
+# Maxn species spatial plot ----
   # Create spatial plot
-  output$spatial.plot <- renderLeaflet({
-    map <- leaflet(trends_data()) %>%
+  output$maxn.spatial.plot <- renderLeaflet({
+    map <- leaflet(maxn_species_data()) %>%
       addTiles()%>%
       fitBounds(~min(longitude), ~min(latitude), ~max(longitude), ~max(latitude))
 
-    overzero <- filter(trends_data(), maxn > 0)
-    equalzero <- filter(trends_data(), maxn == 0)
+    overzero <- filter(maxn_species_data(), maxn > 0)%>%glimpse()
+    equalzero <- filter(maxn_species_data(), maxn == 0)%>%glimpse()
+    
     if (nrow(overzero)) {
       map <- map %>%
         addCircleMarkers(
@@ -1072,7 +1037,7 @@ ggplot(mass.metrics, aes(x = level, y=total.mass, fill = status, group=status)) 
   })
   
   
-  # Maxn Assemblage Spatial plot ----
+# Maxn metric spatial plot ----
   # Create spatial plot
   output$assemblage.maxn.spatial.plot <- renderLeaflet({
     
@@ -1109,23 +1074,7 @@ ggplot(mass.metrics, aes(x = level, y=total.mass, fill = status, group=status)) 
   
   
   
-# Length plots ----
-
-  output$length.status.plot <- renderPlot({
-    
-  ggplot(length_trends_data(),aes(x = factor(status), y = length,  fill = status, notch=FALSE, outlier.shape = NA),alpha=0.5) + 
-    theme( panel.background = element_blank(),axis.line = element_line(colour = "black"))+
-    stat_boxplot(geom='errorbar')+
-    geom_boxplot(outlier.color = NA, notch=FALSE)+
-    stat_summary(fun.y=mean, geom="point", shape=23, size=4)+ #this is adding the dot for the mean
-    theme_bw()+
-    Theme1+
-    xlab("Status") + ylab("Length (mm)") +
-    theme_bw() +
-    Theme1
-  })
-  
-## Habitat spatial plot ----
+# Habitat spatial plot ----
   output$habitat.spatial.plot <- renderLeaflet({
     
     data<-hab_campaignid_data()[,c("macroalgae","stony.corals","octocoral.black","sponges","hydroids","consolidated","unconsolidated")]
@@ -1197,184 +1146,17 @@ ggplot(mass.metrics, aes(x = level, y=total.mass, fill = status, group=status)) 
     map
   })
 
-# SUMMARYS -----
-  output$maxn.summary.family.selector <- renderUI({
-    req(input$complete.maxn)
-    # read in fst data
-    maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
-      as.data.frame()
-    
-    options <- maxn.data %>%
-      dplyr::distinct(family) %>% 
-      pull("family")%>%
-      sort()
-    
-    options <- c("All", options)
-    updateSelectInput(session, "maxn.summary.family.selector", choices = options, selected = "All")
-  })
-  
-  # Maxn data ----
-  maxn.summary.data <- reactive({
-    life.history<-life.history()
-    
-    # maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
-    #   dplyr::mutate(key="maxn")%>%
-    #   as.data.frame()%>%
-    #   filter(maxn>0)%>%
-    #   ## scientific, trophic, target
-    #   dplyr::group_by(family,genus,species)%>%
-    #   dplyr::summarise(Total.abundance=sum(maxn),Number.of.samples=length(unique(id)))%>%
-    #   ungroup()%>%
-    #   arrange(-Total.abundance)%>%
-    #   dplyr::rename(Family=family,Genus=genus,Species=species,'Total abundance'=Total.abundance,'Number of samples'=Number.of.samples)%>%
-    #   left_join(.,life.history)
-  
-  if (input$maxn.summary.groupby=="Species") {
-    maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
-      as.data.frame()%>%
-      filter(maxn>0)%>%
-      dplyr::group_by(family,genus,species)%>%
-      dplyr::summarise(Total.abundance=sum(maxn),Number.of.samples=length(unique(id)))%>%
-      ungroup()%>%
-      arrange(-Total.abundance)%>%
-      dplyr::rename(Family=family,Genus=genus,Species=species,'Total abundance'=Total.abundance,'Number of samples'=Number.of.samples)%>%
-      left_join(.,life.history)%>%
-      dplyr::rename('Trophic group'=RLS.trophic.group,'Target group'="Fishing.type")
-  }
-    
-  if (input$maxn.summary.groupby=="Target group") {
-    maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
-      as.data.frame()%>%
-      filter(maxn>0)%>%
-      dplyr::rename(Family=family,Genus=genus,Species=species)%>%
-      left_join(.,life.history)%>%
-      #dplyr::rename(target.group=Fishing.type)%>%
-      dplyr::mutate(target.group=str_replace_all(.$Fishing.type,c("R"="Recreational","C"="Commercial","B/"="","B"="Bycatch")))%>%
-      tidyr::replace_na(list(target.group="Non-target"))%>%
-      dplyr::mutate(target.group=str_replace_all(.$target.group,c("Commercial/Recreational"="Target","Commercial"="Target","Recreational"="Target")))%>%
-      dplyr::group_by(target.group)%>%
-      dplyr::summarise(Total.abundance=sum(maxn),Number.of.samples=length(unique(id)))%>%
-      ungroup()%>%
-      arrange(-Total.abundance)%>%
-      dplyr::rename('Total abundance'=Total.abundance,'Number of samples'=Number.of.samples,'Target group'=target.group)%>%
-      glimpse()
-  }
-    
-  if (input$maxn.summary.groupby=="Trophic group") {
-    maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
-      as.data.frame()%>%
-      filter(maxn>0)%>%
-      dplyr::rename(Family=family,Genus=genus,Species=species)%>%
-      left_join(.,life.history)%>%
-      dplyr::rename(trophic.group=RLS.trophic.group)%>%
-      tidyr::replace_na(list(trophic.group="no trophic group"))%>%
-      dplyr::group_by(trophic.group)%>%
-      dplyr::summarise(Total.abundance=sum(maxn),Number.of.samples=length(unique(id)))%>%
-      ungroup()%>%
-      arrange(-Total.abundance)%>%
-      dplyr::rename('Total abundance'=Total.abundance,'Number of samples'=Number.of.samples,'Trophic group'=trophic.group)
-  }
-    
-    maxn.data
-  })
-    
-  output$maxn.summary <- DT::renderDataTable(
-    DT::datatable(maxn.summary.data(), options = list( # [, input$show_vars, drop = FALSE]
-        lengthMenu = list(c(10, 25, 50, -1), c('10', '25','50', 'All')),
-        pageLength = 15, rownames= FALSE
-      )
-    )
-  )
-  
-  maxn.summary <- reactive({
-    maxn.data <- fst::read_fst(input$complete.maxn$datapath)%>%
-      dplyr::mutate(key="maxn")%>%
-      as.data.frame()
-  })
-  
-  output$overall.abundance <- renderText({ 
-    paste("Overall total abundance:",sum(maxn.summary.data()$'Total abundance'))
-  })
-  
-  output$species.richness <- renderText({ 
-    paste("Overall species richness:",length(unique(maxn.summary()$scientific)))
-  })
-  
-  
-  # Length data ----
-  length.summary.data <- reactive({
-    life.history<-life.history()
-    
-    if (input$length.summary.groupby=="Species") {
-      length.data <- fst::read_fst(input$complete.length$datapath)%>%
-        as.data.frame()%>%
-        filter(length>0)%>%
-        dplyr::group_by(family,genus,species)%>%
-        dplyr::summarise(Total.measured=sum(number),Number.of.samples=length(unique(id)),Mean.length=mean(length),Min.length=min(length),Max.length=max(length))%>%
-        mutate(Mean.length=round(Mean.length, digits=2))%>%
-        mutate(Min.length=round(Min.length, digits=2))%>%
-        mutate(Max.length=round(Max.length, digits=2))%>%
-        ungroup()%>%
-        arrange(-Total.measured)%>%
-        dplyr::rename(Family=family,Genus=genus,Species=species)%>%
-        dplyr::rename('Total measured'=Total.measured,'Number of samples'=Number.of.samples,'Mean length'=Mean.length,'Min length'=Min.length,'Max length'=Max.length)%>%
-        left_join(.,life.history)%>%
-        dplyr::rename('Trophic group'=RLS.trophic.group,"Target group"=Fishing.type)
-    
-    }
-    
-    if (input$length.summary.groupby=="Target group") {
-      length.data <- fst::read_fst(input$complete.length$datapath)%>%
-        as.data.frame()%>%
-        filter(length>0)%>%
-        dplyr::rename(Family=family,Genus=genus,Species=species)%>%
-        left_join(life.history)%>%
-        dplyr::rename(target.group=Fishing.type)%>%
-        dplyr::mutate(target.group=str_replace_all(.$target.group,c("R"="Recreational","C"="Commercial","B/"="","B"=NA)))%>%
-        dplyr::mutate(target.group=str_replace_all(.$target.group,c("Commercial/Recreational"="Target","Commercial"="Target","Recreational"="Target")))%>%
-        tidyr::replace_na(list(target.group="Non-target"))%>%
-        dplyr::group_by(target.group)%>%
-        dplyr::summarise(Total.measured=sum(number),Number.of.samples=length(unique(id)),Mean.length=mean(length),Min.length=min(length),Max.length=max(length))%>%
-        mutate(Mean.length=round(Mean.length, digits=2))%>%
-        mutate(Min.length=round(Min.length, digits=2))%>%
-        mutate(Max.length=round(Max.length, digits=2))%>%
-        ungroup()%>%
-        arrange(-Total.measured)%>%
-        dplyr::rename('Total measured'=Total.measured,'Number of samples'=Number.of.samples,'Mean length'=Mean.length,'Min length'=Min.length,'Max length'=Max.length,'Target group'=target.group)
-    }
-    
-    if (input$length.summary.groupby=="Trophic group") {
-      length.data <- fst::read_fst(input$complete.length$datapath)%>%
-        as.data.frame()%>%
-        filter(length>0)%>%
-        dplyr::rename(Family=family,Genus=genus,Species=species)%>%
-        left_join(life.history)%>%
-        dplyr::rename(trophic.group=RLS.trophic.group)%>%
-        tidyr::replace_na(list(trophic.group="No trophic group"))%>%
-        dplyr::group_by(trophic.group)%>%
-        dplyr::summarise(Total.measured=sum(number),Number.of.samples=length(unique(id)),Mean.length=mean(length),Min.length=min(length),Max.length=max(length))%>%
-        mutate(Mean.length=round(Mean.length, digits=2))%>%
-        mutate(Min.length=round(Min.length, digits=2))%>%
-        mutate(Max.length=round(Max.length, digits=2))%>%
-        ungroup()%>%
-        arrange(-Total.measured)%>%
-        dplyr::rename('Total measured'=Total.measured,'Number of samples'=Number.of.samples,'Mean length'=Mean.length,'Min length'=Min.length,'Max length'=Max.length, 'Trophic group'=trophic.group)
-      
-    }
-    length.data 
-  })
-  
-  output$length.summary <- DT::renderDataTable(
-    DT::datatable(length.summary.data(), options = list( #
-      lengthMenu = list(c(10, 25, 50, -1), c('10', '25','50', 'All')),
-      pageLength = 15, rownames= FALSE,digits=2)
-    )
-  )
 
-  
-  
-  
-  
-  
+# Download script ----
+  output$downloadData <- downloadHandler(
+    filename <- function() {
+      paste("example-plotting-script", "R", sep=".")
+    },
+    
+    content <- function(file) {
+      file.copy("example-plotting-script.R", file)
+    },
+    contentType = "R File/R"
+  )
   
 }

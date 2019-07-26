@@ -33,9 +33,6 @@ navbarPage(
     "MaxN summary",
     sidebarLayout(
       sidebarPanel(
-        #checkboxGroupInput("show_vars", "Select column headers:",
-        #                   c("Family","Genus","Species","Total abundance","Number of samples","Trophic group","Target group","Commercial","Recreational","Bycatch"), selected = c("Family","Genus","Species","Total abundance","Number of samples","Trophic group","Target group","Commercial","Recreational","Bycatch")),
-        
         selectInput("maxn.summary.groupby", "Summarise by :",
                     c("Species" = "Species",
                       "Target group" = "Target group",
@@ -58,57 +55,57 @@ navbarPage(
       sidebarPanel(
         
         # Select CampaignID
-        selectInput(inputId = "campaignid.selector", label = "CampaignID",
+        selectInput(inputId = "maxn.campaignid.selector", label = "CampaignID",
                     choices = NULL),
         
         # Select Family, Genus and Species
-        htmlOutput("family.selector",multiple=TRUE),
-        htmlOutput("genus.selector",multiple=TRUE),
-        htmlOutput("species.selector",multiple=TRUE)
+        htmlOutput("maxn.family.selector",multiple=TRUE),
+        htmlOutput("maxn.genus.selector",multiple=TRUE),
+        htmlOutput("maxn.species.selector",multiple=TRUE)
       ),
       
       # Plots
       mainPanel(
-        leafletOutput(outputId = "spatial.plot", height = "500px"),
-        plotOutput(outputId = "status.plot", height = "300px"),
-        plotOutput(outputId = "location.plot", height = "300px"),
-        plotOutput(outputId = "site.plot", height = "300px")
+        leafletOutput(outputId = "maxn.spatial.plot", height = "500px"),
+        plotOutput(outputId = "maxn.status.plot", height = "300px"),
+        plotOutput(outputId = "maxn.location.plot", height = "300px"),
+        plotOutput(outputId = "maxn.site.plot", height = "300px")
       )
     )
   ),
-  
-
   
   # MaxN assemblage plots Tab ----
-  tabPanel(
-    "MaxN plot assemblage",
-    sidebarLayout(
-      sidebarPanel(
-        selectInput(inputId = "assemblage.campaignid.selector", label = "CampaignID",
-                    choices = NULL),
-        selectInput("assemblage.maxn.metric.selector", "Select metric to plot", choices = c("Total abundance","Species richness"), multiple = FALSE)),
-      
-      mainPanel(leafletOutput(outputId = "assemblage.maxn.spatial.plot", height = "500px"),
-                plotOutput(outputId = "assemblage.maxn.status.plot", height = "300px"),
-                plotOutput(outputId = "assemblage.maxn.location.plot", height = "300px"),
-                plotOutput(outputId = "assemblage.maxn.site.plot", height = "300px")
-      )
-    )
-  ),
-  
-  # MaxN metric plots Tab ----
   tabPanel(
     "MaxN plot metrics",
     sidebarLayout(
       sidebarPanel(
-        selectInput(inputId = "metrics.maxn.campaignid.selector", label = "CampaignID",
+        selectInput(inputId = "maxn.metric.campaignid.selector", label = "CampaignID",
                     choices = NULL),
-        selectInput("metrics.maxn.metric.selector", "Select metric to plot", choices = c("Target group","Trophic group"), multiple = FALSE)),
+        selectInput("metric.selector", "Select metric to plot", choices = c("Total abundance",
+                                                                             "Species richness",
+                                                                             "Abundance by trophic group",
+                                                                             "Abundance by target group"), multiple = FALSE)),
       
-      mainPanel(plotOutput(outputId = "metrics.maxn.status.plot", height = "600px"))
+      mainPanel(leafletOutput(outputId = "maxn.metric.spatial.plot", height = "500px"),
+                plotOutput(outputId = "maxn.metric.maxn.status.plot", height = "300px"),
+                plotOutput(outputId = "maxn.metric.location.plot", height = "300px"),
+                plotOutput(outputId = "maxn.metric.site.plot", height = "300px")
+      )
     )
   ),
   
+  # # MaxN metric plots Tab ----
+  # tabPanel(
+  #   "MaxN plot metrics",
+  #   sidebarLayout(
+  #     sidebarPanel(
+  #       selectInput(inputId = "metrics.maxn.campaignid.selector", label = "CampaignID",
+  #                   choices = NULL),
+  #       selectInput("metrics.maxn.metric.selector", "Select metric to plot", choices = c("Target group","Trophic group"), multiple = FALSE)),
+  #     
+  #     mainPanel(plotOutput(outputId = "metrics.maxn.status.plot", height = "600px"))
+  #   )
+  # ),
   
   # Length summary Tab ----
   tabPanel(
